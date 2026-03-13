@@ -10,3 +10,9 @@ class DocUrlModel(BaseModel):
         if not v.endswith(".md"):
             raise ValueError("url must ends with .md")
         return v
+
+
+class ChunkModel(BaseModel):
+    text: str
+    source: str
+    chunk_index: int
