@@ -5,13 +5,16 @@ import re
 from collections.abc import Generator
 
 import aiohttp
+import chromadb
 import tiktoken
 from app.models.pydantic import ChunkModel, DocUrlModel
+from sentence_transformers import SentenceTransformer
 
 PATH_TO_ROOT_FOLDER = pathlib.Path(__file__).resolve().parent
 PATH_TO_DATA_FOLDER = PATH_TO_ROOT_FOLDER / "data"
 PATH_TO_URLS_FILE = PATH_TO_DATA_FOLDER / "urls.txt"
 PATH_TO_PAGES_FOLDER = PATH_TO_DATA_FOLDER / "pages"
+PATH_TO_CHROMADB = PATH_TO_DATA_FOLDER / "chroma_db"
 PATH_TO_PAGES_FOLDER.mkdir(parents=True, exist_ok=True)
 
 PYTHON_PATTERN = r"(?im)^.*python.*$"
@@ -22,15 +25,26 @@ EXCLUDED_PREFIXES = (
     "https://docs.langchain.com/oss/python/langchain/changelog",
 )
 DOCS_URL = "https://docs.langchain.com/llms.txt"
+EXCLUDED_DOCS_TEXT = (
+    """> ## Documentation Index
+> Fetch the complete documentation index at: https://docs.langchain.com/llms.txt
+> Use this file to discover all available pages before exploring further.
+
+""",
+)
 
 HEADERS = {"User-Agent": "Mozilla/5.0"}
 
 CHUNK_SIZE = 200
 CHUNK_OVERLAP = 30
+BATCH_SIZE = 100
 
-enc = tiktoken.get_encoding("cl100k_base")
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+enc = tiktoken.get_encoding("cl100k_base")
+model = SentenceTransformer("all-MiniLM-L6-v2")
+client = chromadb.PersistentClient(path=PATH_TO_CHROMADB)
+collection = client.get_or_create_collection(name="langchain_docs")
 
 
 async def get_docs_text(session: aiohttp.ClientSession, url: str) -> str | None:
@@ -71,6 +85,12 @@ def dump_urls(docs_urls: list[DocUrlModel]) -> None:
     PATH_TO_URLS_FILE.write_text("\n".join(str(url.url) for url in docs_urls) + "\n", encoding="utf-8")
 
 
+def filter_doc(doc_text: str, excluded_text: tuple) -> str:
+    for string in excluded_text:
+        doc_text = doc_text.replace(string, "")
+    return doc_text
+
+
 async def download_docs(session: aiohttp.ClientSession, url: str, semaphore: asyncio.Semaphore) -> None:
     try:
         async with semaphore:
@@ -88,20 +108,22 @@ async def download_docs(session: aiohttp.ClientSession, url: str, semaphore: asy
 
                 data = await response.text()
 
+                data = filter_doc(doc_text=data, excluded_text=EXCLUDED_DOCS_TEXT)
+
                 (PATH_TO_PAGES_FOLDER / filename).write_text(data, encoding="utf-8")
 
     except aiohttp.ClientResponseError as err:
         logger.warning(f"HTTP {err.status}: {url}")
 
-    except Exception as err:
+    except Exception as err:  # noqa: BLE001
         logger.error(f"ERROR: {err}, url: {url}")
 
 
-def tokens_to_chunks(tokens: list[int]) -> Generator:
-    step = CHUNK_SIZE - CHUNK_OVERLAP
+def tokens_to_chunks(tokens: list[int], chunk_size: int, chunk_overlap: int) -> Generator:
+    step = chunk_size - chunk_overlap
 
     for i in range(0, len(tokens), step):
-        chunk_tokens = tokens[i : i + CHUNK_SIZE]
+        chunk_tokens = tokens[i : i + chunk_size]
         yield enc.decode(chunk_tokens)
 
 
@@ -109,10 +131,42 @@ def convert_to_chunk_model(index: int, filename: str, chunk_text: str) -> ChunkM
     return ChunkModel(text=chunk_text, source=filename, chunk_index=index)
 
 
+def chunked(lst: list, size: int) -> Generator:
+    for i in range(0, len(lst), size):
+        yield lst[i : i + size]
+
+
+def load_to_chroma(chunks: list[ChunkModel]) -> None:
+    if collection.count() > 0:
+        logger.info(f"Collection already exists: {collection.count()} chunks, skipping")
+        return
+
+    logger.info(f"Loading {len(chunks)} chunks to ChromaDB...")
+
+    for batch in chunked(chunks, BATCH_SIZE):
+        # собираем четыре списка из текущего батча
+        texts = [chunk.text for chunk in batch]
+        ids = [f"{chunk.source}_{chunk.chunk_index}" for chunk in batch]
+        metadatas = [{"source": chunk.source, "chunk_index": chunk.chunk_index} for chunk in batch]
+
+        # model.encode() возвращает numpy массив — ChromaDB ожидает обычный list
+        # поэтому вызываем .tolist()
+        embeddings = model.encode(texts).tolist()
+
+        collection.add(
+            ids=ids,
+            documents=texts,
+            embeddings=embeddings,
+            metadatas=metadatas,
+        )
+
+    logger.info(f"Done. Collection count: {collection.count()}")
+
+
 async def main():
     async with aiohttp.ClientSession(headers=HEADERS) as session:
         # 1st stage
-        logger.info("Stage 1")
+        logger.info("Stage 1 - GET doc urls)")
         docs_text = await get_docs_text(session=session, url=DOCS_URL)
         if not docs_text:
             return
@@ -121,21 +175,38 @@ async def main():
         dump_urls(docs_urls=docs_urls)
 
         # 2nd stage
-        logger.info("Stage 2")
+        logger.info("Stage 2 - Download all docs")
         sem = asyncio.Semaphore(10)
         await asyncio.gather(*(download_docs(session=session, url=url.url, semaphore=sem) for url in docs_urls))
 
-    # 3rd stage
-    logger.info("Stage 3")
-    pages = PATH_TO_PAGES_FOLDER.glob("*.md")
-    all_chunks = []
-    for page in pages:
-        text = page.read_text(encoding="utf-8")
-        tokens = enc.encode(text=text)
-        for index, chunk in enumerate(tokens_to_chunks(tokens)):
-            all_chunks.append(convert_to_chunk_model(index=index, filename=page.name, chunk_text=chunk))
+    # # 3rd stage
+    # logger.info("Stage 3 - Convert docs to chunks")
+    # pages = PATH_TO_PAGES_FOLDER.glob("*.md")
+    # all_chunks = []
+    # for page in pages:
+    #     text = page.read_text(encoding="utf-8")
+    #     tokens = enc.encode(text=text)
+    #     for index, chunk in enumerate(tokens_to_chunks(tokens, chunk_size=CHUNK_SIZE, chunk_overlap=CHUNK_OVERLAP)):
+    #         all_chunks.append(convert_to_chunk_model(index=index, filename=page.name, chunk_text=chunk))
 
-    logger.info(f"Total chunks: {len(all_chunks)}")
+    # logger.info(f"Total chunks: {len(all_chunks)}")
+
+    # # 4th stage
+    # logger.info("Stage 4")
+    # load_to_chroma(chunks=all_chunks)
+
+    # query = "how to create an agent in LangChain"
+
+    # query_embedding = model.encode([query]).tolist()
+
+    # results = collection.query(
+    #     query_embeddings=query_embedding,
+    #     n_results=3,
+    # )
+
+    # for i, doc in enumerate(results["documents"][0]):
+    #     source = results["metadatas"][0][i]["source"]
+    #     logger.info(f"Result {i + 1} [{source}]:\n{doc[:200]}\n")
 
 
 if __name__ == "__main__":
