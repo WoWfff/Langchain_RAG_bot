@@ -9,7 +9,7 @@ import chromadb
 import tiktoken
 import torch
 from app.models.pydantic import ChunkModel, DocUrlModel
-from langchain_huggingface import HuggingFaceEmbeddings
+from chromadb.utils import embedding_functions
 
 PATH_TO_ROOT_FOLDER = pathlib.Path(__file__).resolve().parent
 PATH_TO_DATA_FOLDER = PATH_TO_ROOT_FOLDER / "data"
@@ -43,13 +43,13 @@ BATCH_SIZE = 100
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 enc = tiktoken.get_encoding("o200k_base")
-embeddings = HuggingFaceEmbeddings(
+embedding_function = embedding_functions.SentenceTransformerEmbeddingFunction(
     model_name="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
-    model_kwargs={"device": "cuda" if torch.cuda.is_available() else "cpu"},
-    encode_kwargs={"normalize_embeddings": True},
+    device="cuda" if torch.cuda.is_available() else "cpu",
+    normalize_embeddings=True,
 )
 client = chromadb.PersistentClient(path=PATH_TO_CHROMADB)
-collection = client.get_or_create_collection(name="langchain_docs")
+collection = client.get_or_create_collection(name="langchain_docs", embedding_function=embedding_function)  # type: ignore[arg-type]
 
 
 async def get_docs_text(session: aiohttp.ClientSession, url: str) -> str | None:
@@ -124,11 +124,11 @@ async def download_docs(session: aiohttp.ClientSession, url: str, semaphore: asy
         logger.error(f"ERROR: {err}, url: {url}")
 
 
-def tokens_to_chunks(tokens: list[int], chunk_size: int, chunk_overlap: int) -> Generator:
-    step = chunk_size - chunk_overlap
+def tokens_to_chunks(tokens: list[int]) -> Generator:
+    step = CHUNK_SIZE - CHUNK_OVERLAP
 
     for i in range(0, len(tokens), step):
-        chunk_tokens = tokens[i : i + chunk_size]
+        chunk_tokens = tokens[i : i + CHUNK_SIZE]
         yield enc.decode(chunk_tokens)
 
 
@@ -139,6 +139,23 @@ def convert_to_chunk_model(index: int, filename: str, chunk_text: str) -> ChunkM
 def chunked(lst: list, size: int) -> Generator:
     for i in range(0, len(lst), size):
         yield lst[i : i + size]
+
+
+def dump_data_to_chromadb(all_chunks: list[ChunkModel]) -> None:
+    if collection.count() > 0:
+        logger.info(f"Collection already exists: {collection.count()} chunks, skipping")
+        return
+
+    documents = [chunk.text for chunk in all_chunks]
+    metadatas = [{"source": chunk.source} for chunk in all_chunks]
+    ids = [f"{chunk.source}_{chunk.chunk_index}" for chunk in all_chunks]
+
+    for i in range(0, len(documents), BATCH_SIZE):
+        collection.add(
+            documents=documents[i : i + BATCH_SIZE],
+            metadatas=metadatas[i : i + BATCH_SIZE],  # type: ignore[arg-type]
+            ids=ids[i : i + BATCH_SIZE],
+        )
 
 
 async def main():
@@ -164,10 +181,15 @@ async def main():
     for page in pages:
         text = page.read_text(encoding="utf-8")
         tokens = enc.encode(text=text)
-        for index, chunk in enumerate(tokens_to_chunks(tokens, chunk_size=CHUNK_SIZE, chunk_overlap=CHUNK_OVERLAP)):
+        for index, chunk in enumerate(tokens_to_chunks(tokens)):
             all_chunks.append(convert_to_chunk_model(index=index, filename=page.name, chunk_text=chunk))
 
     logger.info(f"Total chunks: {len(all_chunks)}")
+
+    # 4th stage
+    logger.info("Stage 4 - Dump data to ChromaDB")
+    dump_data_to_chromadb(all_chunks=all_chunks)
+    logger.info(f"Done. Collection count: {collection.count()}")
 
 
 if __name__ == "__main__":
