@@ -9,5 +9,6 @@ wheels/
 # Virtual environments
 .venv
 
-urls.txt
+data/urls.txt
 data/pages/*.md
+data/chroma_db/*
