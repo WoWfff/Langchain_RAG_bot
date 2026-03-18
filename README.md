@@ -1,6 +1,7 @@
 # Requirements
 
 * Python 3.13+
+* Gemini API Key
 * uv (recommended)
 * direnv (optional)
 
@@ -36,16 +37,25 @@ source .venv/bin/activate
 uv sync
 ```
 
----
-
 ### Using pip
 
 ```bash
 cd Langchain_RAG_bot
 python3 -m venv .venv
 source .venv/bin/activate
-python -m pip install -r requirements.txt
+python3 -m pip install -r requirements.txt
 ```
+
+---
+
+## ⚠️ After installation
+   Execute:
+
+   ```bash
+   cp .env.example .env
+   ```
+   Then write your Gemini API key into .env file
+
 
 ---
 
@@ -60,5 +70,5 @@ uv run main.py
 ### Using pip
 
 ```bash
-python main.py
+python3 main.py
 ```

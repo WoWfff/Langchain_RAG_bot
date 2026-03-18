@@ -16,3 +16,9 @@ class ChunkModel(BaseModel):
     text: str
     source: str
     chunk_index: int
+
+
+class AIResponse(BaseModel):
+    text: str
+    source: str
+    chunk_index: int | None

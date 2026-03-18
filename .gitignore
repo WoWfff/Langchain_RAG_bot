@@ -13,3 +13,4 @@ data/urls.txt
 data/pages/*.md
 data/chromadb/*
 .envrc
+.env

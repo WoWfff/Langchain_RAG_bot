@@ -1,12 +1,13 @@
 import asyncio
 import logging
 import re
-from collections.abc import Generator
+from collections.abc import Generator, Mapping
 from pathlib import Path
+from typing import Any
 
 import aiohttp
 import chromadb
-from chromadb.utils.embedding_functions import EmbeddingFunction
+from langchain_core.embeddings import Embeddings
 from tiktoken import Encoding
 
 from app.models.pydantic import ChunkModel, DocUrlModel
@@ -131,20 +132,31 @@ def chunked(lst: list, size: int) -> Generator:
         yield lst[i : i + size]
 
 
-def dump_data_to_chromadb(all_chunks: list[ChunkModel], collection: chromadb.Collection) -> None:
+def dump_data_to_chromadb(
+    all_chunks: list[ChunkModel],
+    collection: chromadb.Collection,
+    embedding: Embeddings,
+) -> None:
     if collection.count() > 0:
         logger.info(f"Collection already exists: {collection.count()} chunks, skipping")
         return
 
     documents = [chunk.text for chunk in all_chunks]
-    metadatas = [{"source": chunk.source} for chunk in all_chunks]
+    metadatas: list[Mapping[str, Any]] = [{"source": chunk.source} for chunk in all_chunks]
     ids = [f"{chunk.source}_{chunk.chunk_index}" for chunk in all_chunks]
 
     for i in range(0, len(documents), BATCH_SIZE):
+        batch_docs = documents[i : i + BATCH_SIZE]
+        batch_meta = metadatas[i : i + BATCH_SIZE]
+        batch_ids = ids[i : i + BATCH_SIZE]
+
+        batch_embeddings: list[list[float]] = embedding.embed_documents(batch_docs)
+
         collection.add(
-            documents=documents[i : i + BATCH_SIZE],
-            metadatas=metadatas[i : i + BATCH_SIZE],  # type: ignore[arg-type]
-            ids=ids[i : i + BATCH_SIZE],
+            documents=batch_docs,
+            metadatas=batch_meta,
+            ids=batch_ids,
+            embeddings=batch_embeddings,  # type: ignore
         )
 
 
@@ -152,13 +164,13 @@ async def ingest_docs_to_chromadb(
     path_to_pages_folder: Path,
     path_to_chromadb: Path,
     path_to_urls_file: Path,
-    embedding_function: EmbeddingFunction,
+    embedding: Embeddings,
     encoding_model: Encoding,
     collection_name: str,
     skip_downloading: bool = False,
-):
+) -> None:
     client = chromadb.PersistentClient(path=path_to_chromadb)
-    collection = client.get_or_create_collection(name=collection_name, embedding_function=embedding_function)  # type: ignore[arg-type]
+    collection = client.get_or_create_collection(name=collection_name)
 
     if not skip_downloading:
         async with aiohttp.ClientSession(headers=HEADERS) as session:
@@ -201,5 +213,5 @@ async def ingest_docs_to_chromadb(
 
     # 4th stage
     logger.info("Stage 4 - Dump data to ChromaDB")
-    dump_data_to_chromadb(all_chunks=all_chunks, collection=collection)
+    dump_data_to_chromadb(all_chunks=all_chunks, collection=collection, embedding=embedding)
     logger.info(f"Done. Collection count: {collection.count()}")
