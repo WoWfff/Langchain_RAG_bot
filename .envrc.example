@@ -1,0 +1,11 @@
+if [ ! -f ".venv/bin/activate" ]; then
+  echo "📦 Creating virtual environment..."
+  uv venv
+fi
+
+source .venv/bin/activate
+
+if [ "uv.lock" -nt ".venv" ]; then
+  echo "🔄 Syncing dependencies..."
+  uv sync
+fi

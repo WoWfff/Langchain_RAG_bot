@@ -11,4 +11,5 @@ wheels/
 
 data/urls.txt
 data/pages/*.md
-data/chroma_db/*
+data/chromadb/*
+.envrc
