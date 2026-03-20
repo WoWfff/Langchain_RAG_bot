@@ -1,15 +1,11 @@
 from pathlib import Path
 
 from langchain.agents import create_agent
-from langchain.agents.structured_output import ToolStrategy
-from langchain.messages import HumanMessage
 from langchain.tools import tool
 from langchain_chroma import Chroma
 from langchain_core.embeddings import Embeddings
 from langchain_core.tools import BaseTool
 from langchain_google_genai import ChatGoogleGenerativeAI
-
-from app.models.pydantic import AIResponse
 
 
 class Agent:
@@ -43,7 +39,6 @@ class Agent:
             self.agent = create_agent(
                 model=self.model,
                 tools=[*tools],
-                response_format=ToolStrategy(AIResponse),
                 system_prompt=system_prompt,
             )
 
@@ -61,8 +56,33 @@ class Agent:
 
     async def process_message(self, message: str):
         try:
-            messages = {"messages": [HumanMessage(content=message)]}
-            result = await self.agent.ainvoke(messages)  # type: ignore
-            return result
+            messages = {"messages": [{"role": "user", "content": message}]}
+
+            buffer = ""
+
+            async for chunk in self.agent.astream(
+                input=messages,
+                stream_mode="messages",
+                version="v2",
+            ):  # type: ignore
+                if chunk["type"] != "messages":
+                    continue
+
+                token, _ = chunk["data"]
+
+                for block in token.content_blocks:
+                    if block["type"] != "text":
+                        continue
+
+                    text = block["text"]
+                    buffer += text
+
+                    if " " in buffer or len(buffer) > 20:
+                        yield buffer
+                        buffer = ""
+
+            if buffer:
+                yield buffer
+
         except Exception as err:
             raise ValueError("Error while processing user message.") from err

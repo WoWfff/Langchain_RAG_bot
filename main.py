@@ -44,15 +44,15 @@ langchain_embedding = HuggingFaceEmbeddings(
 
 async def main():
     # Create chroma database
-    await ingest_docs_to_chromadb(
-        path_to_chromadb=PATH_TO_CHROMADB,
-        path_to_pages_folder=PATH_TO_PAGES_FOLDER,
-        path_to_urls_file=PATH_TO_URLS_FILE,
-        embedding=langchain_embedding,
-        encoding_model=encoding_model,
-        collection_name=COLLECTION_NAME,
-        skip_downloading=True,
-    )
+    # await ingest_docs_to_chromadb(
+    #     path_to_chromadb=PATH_TO_CHROMADB,
+    #     path_to_pages_folder=PATH_TO_PAGES_FOLDER,
+    #     path_to_urls_file=PATH_TO_URLS_FILE,
+    #     embedding=langchain_embedding,
+    #     encoding_model=encoding_model,
+    #     collection_name=COLLECTION_NAME,
+    #     skip_downloading=True,
+    # )
 
     # Run langchain agent
     agent = Agent(
@@ -64,9 +64,8 @@ async def main():
     )
 
     # Test
-    result = await agent.process_message("what is langchain?")
-
-    print(result["structured_reponse"].text)
+    async for text in agent.process_message("what is langchain?"):
+        print(text, end="", flush=True)
 
 
 if __name__ == "__main__":
