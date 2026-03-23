@@ -1,3 +1,5 @@
+import logging
+from collections.abc import AsyncGenerator
 from pathlib import Path
 
 from langchain.agents import create_agent
@@ -6,6 +8,9 @@ from langchain_chroma import Chroma
 from langchain_core.embeddings import Embeddings
 from langchain_core.tools import BaseTool
 from langchain_google_genai import ChatGoogleGenerativeAI
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 class Agent:
@@ -28,8 +33,8 @@ class Agent:
                 model=model_name,
                 temperature=1.0,
                 max_tokens=None,
-                timeout=60,
-                max_retries=2,
+                timeout=120,
+                max_retries=3,
             )
 
             self.retriever = self.db.as_retriever(search_kwargs={"k": 5})
@@ -54,11 +59,9 @@ class Agent:
 
         return [search_docs]
 
-    async def process_message(self, message: str):
+    async def stream_message(self, message: str) -> AsyncGenerator:
         try:
             messages = {"messages": [{"role": "user", "content": message}]}
-
-            buffer = ""
 
             async for chunk in self.agent.astream(
                 input=messages,
@@ -68,21 +71,18 @@ class Agent:
                 if chunk["type"] != "messages":
                     continue
 
-                token, _ = chunk["data"]
+                token, metadata = chunk["data"]
 
-                for block in token.content_blocks:
-                    if block["type"] != "text":
-                        continue
+                if metadata and metadata.get("langgraph_node") == "tools":
+                    logger.info("Tool call")
+                    continue
 
-                    text = block["text"]
-                    buffer += text
+                if metadata and metadata.get("langgraph_node") == "model":
+                    for block in token.content_blocks:
+                        if block["type"] != "text":
+                            continue
 
-                    if " " in buffer or len(buffer) > 20:
-                        yield buffer
-                        buffer = ""
-
-            if buffer:
-                yield buffer
+                        yield block["text"]
 
         except Exception as err:
             raise ValueError("Error while processing user message.") from err

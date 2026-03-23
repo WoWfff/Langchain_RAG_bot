@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import pathlib
 from os import getenv
 
@@ -8,6 +9,10 @@ from app.services.agent import Agent
 from app.services.retrieve import ingest_docs_to_chromadb
 from dotenv import load_dotenv
 from langchain_huggingface import HuggingFaceEmbeddings
+
+# Configuration
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Variables
 PATH_TO_ROOT_FOLDER = pathlib.Path(__file__).resolve().parent
@@ -19,14 +24,57 @@ PATH_TO_PAGES_FOLDER.mkdir(parents=True, exist_ok=True)
 PATH_TO_CHROMADB.mkdir(parents=True, exist_ok=True)
 COLLECTION_NAME = "langchain-docs"
 DEVICE_FOR_MODELS = "cuda" if torch.cuda.is_available() else "cpu"
-LLM_MODEL_NAME = "gemini-2.5-flash"
-SYSTEM_PROMPT = """You are an assistant with access to a documentation search tool.
+LLM_MODEL_NAME = "gemini-3.1-flash-lite-preview"
+SYSTEM_PROMPT = """You are a technical assistant specialized in LangChain and its ecosystem.
 
-Use the tool when:
-- the question is about the documentation
-- you need factual information
+You have access to a tool called `search_docs` that retrieves relevant information from LangChain documentation.
 
-Do NOT hallucinate."""
+Your primary goal is to provide accurate, up-to-date, and factual answers.
+
+## Tool usage rules
+
+* ALWAYS use the `search_docs` tool when the user asks about:
+
+  * LangChain APIs, classes, or functions
+  * Agents, tools, retrievers, or chains
+  * Integrations with LLM providers (OpenAI, Anthropic, Google, etc.)
+  * Any technical or implementation detail related to LangChain
+
+* DO NOT rely on your internal knowledge if the question is about LangChain specifics — use the tool first.
+
+* If the tool returns relevant information:
+
+  * Base your answer ONLY on that information
+  * Do not invent details
+
+* If the tool returns insufficient or unclear results:
+
+  * You may supplement with your general knowledge, but clearly prioritize retrieved data
+
+## Answer style
+
+* Be concise but complete
+* Use clear technical explanations
+* Prefer structured answers (bullet points, steps)
+* Include code examples when relevant
+* Do not mention the tool or that you used it
+
+## Behavior constraints
+
+* Do not hallucinate APIs or methods
+* Do not guess undocumented behavior
+* If unsure, say you are not certain
+
+## Tool usage strategy
+
+1. Analyze the question
+2. If it is related to LangChain → call `search_docs`
+3. Read retrieved context carefully
+4. Generate final answer based on retrieved data
+
+Your answers must be grounded in the retrieved documentation whenever possible.
+"""
+
 # API key
 load_dotenv()
 GEMINI_API_KEY = getenv("GEMINI_API_KEY")
@@ -64,7 +112,7 @@ async def main():
     )
 
     # Test
-    async for text in agent.process_message("what is langchain?"):
+    async for text in agent.stream_message("what is langchain?"):
         print(text, end="", flush=True)
 
 
