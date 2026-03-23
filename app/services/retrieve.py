@@ -10,7 +10,7 @@ import chromadb
 from langchain_core.embeddings import Embeddings
 from tiktoken import Encoding
 
-from app.models.pydantic import ChunkModel, DocUrlModel
+from app.models.agent import ChunkModel, DocUrlModel
 
 PYTHON_PATTERN = r"(?im)^.*python.*$"
 URL_PATTERN = r"\((https?:\/\/[^)]+)\)"

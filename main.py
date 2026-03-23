@@ -2,19 +2,25 @@ import asyncio
 import logging
 import pathlib
 from os import getenv
+from uuid import uuid4
 
 import tiktoken
 import torch
+from app.routers import health
 from app.services.agent import Agent
 from app.services.retrieve import ingest_docs_to_chromadb
 from dotenv import load_dotenv
+from fastapi import FastAPI
 from langchain_huggingface import HuggingFaceEmbeddings
 
 # Configuration
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+app = FastAPI()
+app.include_router(health.router)
 
 # Variables
+thread_id = uuid4()
 PATH_TO_ROOT_FOLDER = pathlib.Path(__file__).resolve().parent
 PATH_TO_DATA_FOLDER = PATH_TO_ROOT_FOLDER / "data"
 PATH_TO_URLS_FILE = PATH_TO_DATA_FOLDER / "urls.txt"
@@ -24,7 +30,7 @@ PATH_TO_PAGES_FOLDER.mkdir(parents=True, exist_ok=True)
 PATH_TO_CHROMADB.mkdir(parents=True, exist_ok=True)
 COLLECTION_NAME = "langchain-docs"
 DEVICE_FOR_MODELS = "cuda" if torch.cuda.is_available() else "cpu"
-LLM_MODEL_NAME = "gemini-3.1-flash-lite-preview"
+LLM_MODEL_NAME = "gemini-3-flash-preview"
 SYSTEM_PROMPT = """You are a technical assistant specialized in LangChain and its ecosystem.
 
 You have access to a tool called `search_docs` that retrieves relevant information from LangChain documentation.
@@ -92,17 +98,17 @@ langchain_embedding = HuggingFaceEmbeddings(
 
 async def main():
     # Create chroma database
-    # await ingest_docs_to_chromadb(
-    #     path_to_chromadb=PATH_TO_CHROMADB,
-    #     path_to_pages_folder=PATH_TO_PAGES_FOLDER,
-    #     path_to_urls_file=PATH_TO_URLS_FILE,
-    #     embedding=langchain_embedding,
-    #     encoding_model=encoding_model,
-    #     collection_name=COLLECTION_NAME,
-    #     skip_downloading=True,
-    # )
+    await ingest_docs_to_chromadb(
+        path_to_chromadb=PATH_TO_CHROMADB,
+        path_to_pages_folder=PATH_TO_PAGES_FOLDER,
+        path_to_urls_file=PATH_TO_URLS_FILE,
+        embedding=langchain_embedding,
+        encoding_model=encoding_model,
+        collection_name=COLLECTION_NAME,
+        skip_downloading=True,
+    )
 
-    # Run langchain agent
+    # Init langchain agent
     agent = Agent(
         path_to_chromadb=PATH_TO_CHROMADB,
         embedding=langchain_embedding,
@@ -111,9 +117,9 @@ async def main():
         model_name=LLM_MODEL_NAME,
     )
 
-    # Test
-    async for text in agent.stream_message("what is langchain?"):
-        print(text, end="", flush=True)
+    @app.on_event("startup")
+    async def startup():
+        app.state.agent = agent
 
 
 if __name__ == "__main__":

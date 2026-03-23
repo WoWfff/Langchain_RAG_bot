@@ -8,9 +8,11 @@ from langchain_chroma import Chroma
 from langchain_core.embeddings import Embeddings
 from langchain_core.tools import BaseTool
 from langchain_google_genai import ChatGoogleGenerativeAI
+from langgraph.checkpoint.memory import MemorySaver
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+memory = MemorySaver()
 
 
 class Agent:
@@ -45,6 +47,7 @@ class Agent:
                 model=self.model,
                 tools=[*tools],
                 system_prompt=system_prompt,
+                checkpointer=memory,
             )
 
         except Exception as err:
@@ -53,20 +56,41 @@ class Agent:
     def _build_tools(self) -> list[BaseTool]:
         @tool
         def search_docs(query: str) -> str:
-            """Search for relevant information in the documentation. Use this tool for technical questions."""
+            """Find the information you need in the documentation.
+            The tool returns information from the documentation, as well as the source of the documentation.
+            Use this tool to resolve technical issues."""
             docs = self.retriever.invoke(query)
             return "\n\n".join(doc.page_content[:500] for doc in docs)
 
         return [search_docs]
 
-    async def stream_message(self, message: str) -> AsyncGenerator:
-        try:
-            messages = {"messages": [{"role": "user", "content": message}]}
+    def extract_ai_response(self, result) -> str:
+        for msg in reversed(result.value["messages"]):
+            if getattr(msg, "type", None) == "ai":
+                return msg.text
+        return ""
 
+    async def process_message(self, message: str, thread_id: str):
+        try:
+            result = await self.agent.ainvoke(
+                input={"messages": [{"role": "user", "content": message}]},
+                version="v2",
+                config={"configurable": {"thread_id": thread_id}},
+            )  # type: ignore
+            text = self.extract_ai_response(result)
+
+            return text
+
+        except Exception as err:
+            raise ValueError("Error while processing user message.") from err
+
+    async def stream_message(self, message: str, thread_id: str) -> AsyncGenerator:
+        try:
             async for chunk in self.agent.astream(
-                input=messages,
+                input={"messages": [{"role": "user", "content": message}]},
                 stream_mode="messages",
                 version="v2",
+                config={"configurable": {"thread_id": thread_id}},
             ):  # type: ignore
                 if chunk["type"] != "messages":
                     continue
