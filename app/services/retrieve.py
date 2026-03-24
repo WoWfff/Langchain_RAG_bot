@@ -142,7 +142,13 @@ def dump_data_to_chromadb(
         return
 
     documents = [chunk.text for chunk in all_chunks]
-    metadatas: list[Mapping[str, Any]] = [{"source": chunk.source} for chunk in all_chunks]
+    metadatas: list[Mapping[str, Any]] = [
+        {
+            "source": chunk.source,
+            "chunk_index": chunk.chunk_index,
+        }
+        for chunk in all_chunks
+    ]
     ids = [f"{chunk.source}_{chunk.chunk_index}" for chunk in all_chunks]
 
     for i in range(0, len(documents), BATCH_SIZE):

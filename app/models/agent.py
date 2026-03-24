@@ -18,7 +18,16 @@ class ChunkModel(BaseModel):
     chunk_index: int
 
 
-class AIResponse(BaseModel):
+class ToolInput(BaseModel):
+    query: str
+
+
+class ToolResponse(BaseModel):
     text: str
     source: str
-    chunk_index: int | None
+    chunk_index: int | str
+
+
+class AgentResult(BaseModel):
+    response_text: str
+    tool_response: list[dict]

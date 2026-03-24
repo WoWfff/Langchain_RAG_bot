@@ -30,7 +30,7 @@ PATH_TO_PAGES_FOLDER.mkdir(parents=True, exist_ok=True)
 PATH_TO_CHROMADB.mkdir(parents=True, exist_ok=True)
 COLLECTION_NAME = "langchain-docs"
 DEVICE_FOR_MODELS = "cuda" if torch.cuda.is_available() else "cpu"
-LLM_MODEL_NAME = "gemini-3-flash-preview"
+LLM_MODEL_NAME = "gemini-2.5-flash"  # gemini-3.1-flash-lite-preview  gemini-2.5-flash-lite
 SYSTEM_PROMPT = """You are a technical assistant specialized in LangChain and its ecosystem.
 
 You have access to a tool called `search_docs` that retrieves relevant information from LangChain documentation.
@@ -117,9 +117,17 @@ async def main():
         model_name=LLM_MODEL_NAME,
     )
 
-    @app.on_event("startup")
-    async def startup():
-        app.state.agent = agent
+    # Test
+    db_pm = await agent.process_message("what is langchain?", thread_id, debug=True)
+
+    stream = []
+    async for chunk in agent.stream_message("what is langchain", thread_id):
+        print(chunk, end="", flush=True)
+        stream.append(chunk)
+
+    # @app.on_event("startup")
+    # async def startup():
+    #     app.state.agent = agent
 
 
 if __name__ == "__main__":

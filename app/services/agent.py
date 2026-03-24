@@ -1,18 +1,25 @@
+import json
 import logging
 from collections.abc import AsyncGenerator
 from pathlib import Path
 
 from langchain.agents import create_agent
-from langchain.tools import tool
 from langchain_chroma import Chroma
 from langchain_core.embeddings import Embeddings
-from langchain_core.tools import BaseTool
+from langchain_core.tools import BaseTool, StructuredTool
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.checkpoint.memory import MemorySaver
+from langgraph.types import GraphOutput
+
+from app.models.agent import AgentResult, ToolInput, ToolResponse
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 memory = MemorySaver()
+
+
+def search(query: str) -> str:
+    return "result"
 
 
 class Agent:
@@ -41,11 +48,11 @@ class Agent:
 
             self.retriever = self.db.as_retriever(search_kwargs={"k": 5})
 
-            tools = self._build_tools()
+            self.tools = self._build_tools()
 
             self.agent = create_agent(
                 model=self.model,
-                tools=[*tools],
+                tools=[*self.tools],
                 system_prompt=system_prompt,
                 checkpointer=memory,
             )
@@ -54,37 +61,83 @@ class Agent:
             raise ValueError("Error while initialising AI agent.") from err
 
     def _build_tools(self) -> list[BaseTool]:
-        @tool
-        def search_docs(query: str) -> str:
-            """Find the information you need in the documentation.
-            The tool returns information from the documentation, as well as the source of the documentation.
-            Use this tool to resolve technical issues."""
+
+        def search_docs(query: str) -> list[dict]:
             docs = self.retriever.invoke(query)
-            return "\n\n".join(doc.page_content[:500] for doc in docs)
+            logger.info("Tool call: search_docs | query=%s | docs_found=%d", query, len(docs))
 
-        return [search_docs]
+            response = [
+                ToolResponse(
+                    text=doc.page_content,
+                    source=doc.metadata.get("source", "unknown"),
+                    chunk_index=doc.metadata.get("chunk_index", "unknown"),
+                ).model_dump()
+                for doc in docs
+            ]
 
-    def extract_ai_response(self, result) -> str:
-        for msg in reversed(result.value["messages"]):
+            return response
+
+        func_tool = StructuredTool.from_function(
+            func=search_docs,
+            name="search_docs",
+            description="""Find the information you need in the documentation.
+    Returns a list of objects with: text, source, chunk_index.""",
+            args_schema=ToolInput,
+        )
+
+        return [func_tool]
+
+    def extract_tool_data(self, message) -> list[dict]:
+        tool_results = []
+
+        try:
+            tool_results.extend(json.loads(message.content))
+        except Exception:  # noqa: BLE001
+            pass
+
+        return tool_results
+
+    def extract_tool_response(self, response: dict) -> list[dict]:
+        messages = response.get("messages", [])
+
+        result: list[dict] = []
+
+        for msg in messages:
+            if msg.type == "tool" and msg.name == "search_docs":
+                result = self.extract_tool_data(message=msg)
+
+        return result
+
+    def extract_ai_response(self, response: dict) -> str:
+        for msg in reversed(response["messages"]):
             if getattr(msg, "type", None) == "ai":
                 return msg.text
         return ""
 
-    async def process_message(self, message: str, thread_id: str):
+    async def process_message(
+        self,
+        message: str,
+        thread_id: str,
+        debug: bool = False,
+    ) -> GraphOutput | AgentResult:
         try:
-            result = await self.agent.ainvoke(
+            result: GraphOutput = await self.agent.ainvoke(
                 input={"messages": [{"role": "user", "content": message}]},
                 version="v2",
                 config={"configurable": {"thread_id": thread_id}},
             )  # type: ignore
-            text = self.extract_ai_response(result)
+            tool_response = self.extract_tool_response(response=result.value)
+            text = self.extract_ai_response(response=result.value)
 
-            return text
+            if debug:
+                return result
+
+            return AgentResult(response_text=text, tool_response=tool_response)
 
         except Exception as err:
             raise ValueError("Error while processing user message.") from err
 
-    async def stream_message(self, message: str, thread_id: str) -> AsyncGenerator:
+    async def stream_message(self, message: str, thread_id: str, debug: bool = False) -> AsyncGenerator:
         try:
             async for chunk in self.agent.astream(
                 input={"messages": [{"role": "user", "content": message}]},
@@ -92,21 +145,21 @@ class Agent:
                 version="v2",
                 config={"configurable": {"thread_id": thread_id}},
             ):  # type: ignore
-                if chunk["type"] != "messages":
-                    continue
+                if debug:
+                    yield chunk
 
-                token, metadata = chunk["data"]
+                else:
+                    if chunk["type"] != "messages":
+                        continue
 
-                if metadata and metadata.get("langgraph_node") == "tools":
-                    logger.info("Tool call")
-                    continue
+                    token, metadata = chunk["data"]
 
-                if metadata and metadata.get("langgraph_node") == "model":
-                    for block in token.content_blocks:
-                        if block["type"] != "text":
-                            continue
+                    if metadata and metadata.get("langgraph_node") == "model":
+                        for block in token.content_blocks:
+                            if block["type"] != "text":
+                                continue
 
-                        yield block["text"]
+                            yield block["text"]
 
         except Exception as err:
             raise ValueError("Error while processing user message.") from err
