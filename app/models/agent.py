@@ -29,5 +29,5 @@ class ToolResponse(BaseModel):
 
 
 class AgentResult(BaseModel):
-    response_text: str
-    tool_response: list[dict]
+    response_text: str | None
+    tool_response: list[dict] | None

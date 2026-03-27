@@ -108,11 +108,22 @@ class Agent:
 
         return result
 
-    def extract_ai_response(self, response: dict) -> str:
+    def extract_ai_response_from_procces_message(self, response: dict) -> str | None:
         for msg in reversed(response["messages"]):
             if getattr(msg, "type", None) == "ai":
                 return msg.text
-        return ""
+        return None
+
+    def extract_ai_response_from_stream_message(self, message) -> list[dict] | None:
+        result = None
+
+        if hasattr(message, "type") and hasattr(message, "text"):
+            if message.type != "tool" or message.status != "success":
+                return None
+
+            result = self.extract_tool_data(message)
+
+        return result
 
     async def process_message(
         self,
@@ -127,7 +138,7 @@ class Agent:
                 config={"configurable": {"thread_id": thread_id}},
             )  # type: ignore
             tool_response = self.extract_tool_response(response=result.value)
-            text = self.extract_ai_response(response=result.value)
+            text = self.extract_ai_response_from_procces_message(response=result.value)
 
             if debug:
                 return result
@@ -137,29 +148,42 @@ class Agent:
         except Exception as err:
             raise ValueError("Error while processing user message.") from err
 
-    async def stream_message(self, message: str, thread_id: str, debug: bool = False) -> AsyncGenerator:
+    async def stream_message(
+        self,
+        message: str,
+        thread_id: str,
+        debug: bool = False,
+    ) -> AsyncGenerator[AgentResult | dict]:
         try:
             async for chunk in self.agent.astream(
                 input={"messages": [{"role": "user", "content": message}]},
-                stream_mode="messages",
+                stream_mode=["messages", "values"],
                 version="v2",
                 config={"configurable": {"thread_id": thread_id}},
             ):  # type: ignore
                 if debug:
-                    yield chunk
+                    yield chunk  # type: ignore
 
                 else:
-                    if chunk["type"] != "messages":
-                        continue
+                    if chunk["type"] == "messages":
+                        token, metadata = chunk["data"]
 
-                    token, metadata = chunk["data"]
+                        if metadata and metadata.get("langgraph_node") == "model":
+                            if hasattr(token, "content_blocks") and token.content_blocks:
+                                for block in token.content_blocks:
+                                    if block.get("type") != "text":
+                                        continue
+                                    yield AgentResult(response_text=block["text"], tool_response=None)  # type: ignore
 
-                    if metadata and metadata.get("langgraph_node") == "model":
-                        for block in token.content_blocks:
-                            if block["type"] != "text":
-                                continue
+                            else:
+                                if getattr(token, "text", None):
+                                    yield AgentResult(response_text=token.text, tool_response=None)
 
-                            yield block["text"]
+                    elif chunk["type"] == "values":
+                        messages = chunk.get("data", {}).get("messages", [])  # type: ignore
+                        for msg in messages:
+                            tool_reponse = self.extract_ai_response_from_stream_message(message=msg)  # type: ignore
+                            yield AgentResult(response_text=None, tool_response=tool_reponse)
 
         except Exception as err:
             raise ValueError("Error while processing user message.") from err
