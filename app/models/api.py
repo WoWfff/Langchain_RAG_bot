@@ -8,7 +8,3 @@ class HealthResponse(BaseModel):
 class ChatRequest(BaseModel):
     message: str
     thread_id: str
-
-
-class ChatResponse(BaseModel):
-    message: str
