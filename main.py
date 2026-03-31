@@ -72,6 +72,8 @@ async def lifespan(app: FastAPI):  # noqa: RUF029
     app.state.status = None
     app.state.is_ready = False
     app.state.error = None
+    app.state.thread_id = None
+    app.state.database = None
 
     asyncio.create_task(init_agent(app=app))  # noqa: RUF006
 
