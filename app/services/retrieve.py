@@ -166,6 +166,17 @@ def dump_data_to_chromadb(
         )
 
 
+def _build_chunks(path_to_pages_folder: Path, encoding_model: Encoding) -> list[ChunkModel]:
+    pages = path_to_pages_folder.glob("*.md")
+    all_chunks = []
+    for page in pages:
+        text = page.read_text(encoding="utf-8")
+        tokens = encoding_model.encode(text=text)
+        for index, chunk in enumerate(tokens_to_chunks(tokens=tokens, encoding_model=encoding_model)):
+            all_chunks.append(convert_to_chunk_model(index=index, filename=page.name, chunk_text=chunk))
+    return all_chunks
+
+
 async def ingest_docs_to_chromadb(
     path_to_pages_folder: Path,
     path_to_chromadb: Path,
@@ -175,20 +186,22 @@ async def ingest_docs_to_chromadb(
     collection_name: str,
     skip_downloading: bool = False,
 ) -> None:
-    client = chromadb.PersistentClient(path=path_to_chromadb)
-    collection = client.get_or_create_collection(name=collection_name)
+    client = await asyncio.to_thread(chromadb.PersistentClient, path=str(path_to_chromadb))
+    collection = await asyncio.to_thread(client.get_or_create_collection, name=collection_name)
 
     if not skip_downloading:
         async with aiohttp.ClientSession(headers=HEADERS) as session:
             # 1st stage
             logger.info("Stage 1 - GET doc urls")
             docs_text = await get_docs_text(session=session, url=DOCS_URL)
+
             if not docs_text:
                 return
 
             raw_urls = filter_urls(docs_text=docs_text)
             docs_urls = format_docs_urls(docs_urls=raw_urls)
-            dump_urls(docs_urls=docs_urls, path_to_urls_file=path_to_urls_file)
+
+            await asyncio.to_thread(dump_urls, docs_urls, path_to_urls_file)
 
             # 2nd stage
             logger.info("Stage 2 - Download all docs")
@@ -207,17 +220,11 @@ async def ingest_docs_to_chromadb(
 
     # 3rd stage
     logger.info("Stage 3 - Convert docs to chunks")
-    pages = path_to_pages_folder.glob("*.md")
-    all_chunks = []
-    for page in pages:
-        text = page.read_text(encoding="utf-8")
-        tokens = encoding_model.encode(text=text)
-        for index, chunk in enumerate(tokens_to_chunks(tokens=tokens, encoding_model=encoding_model)):
-            all_chunks.append(convert_to_chunk_model(index=index, filename=page.name, chunk_text=chunk))
-
+    all_chunks = await asyncio.to_thread(_build_chunks, path_to_pages_folder, encoding_model)
     logger.info(f"Total chunks: {len(all_chunks)}")
 
     # 4th stage
     logger.info("Stage 4 - Dump data to ChromaDB")
-    dump_data_to_chromadb(all_chunks=all_chunks, collection=collection, embedding=embedding)
-    logger.info(f"Done. Collection count: {collection.count()}")
+    await asyncio.to_thread(dump_data_to_chromadb, all_chunks, collection, embedding)
+    count = await asyncio.to_thread(collection.count)
+    logger.info(f"Done. Collection count: {count}")

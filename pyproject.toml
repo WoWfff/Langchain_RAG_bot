@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "aiohttp>=3.13.3",
+    "asyncpg>=0.31.0",
     "chromadb>=1.5.5",
     "dotenv>=0.9.9",
     "fastapi[standard]>=0.135.1",

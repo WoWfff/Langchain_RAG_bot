@@ -15,3 +15,8 @@ class ProgressResponse(BaseModel):
     status: str
     is_ready: bool
     error: str | None
+
+
+class AddUserRequest(BaseModel):
+    cookies_id: str
+    thread_id: str

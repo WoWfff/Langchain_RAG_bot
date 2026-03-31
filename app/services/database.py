@@ -2,7 +2,9 @@ import logging
 import os
 
 from dotenv import load_dotenv
+from fastapi import HTTPException
 from sqlalchemy import insert
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.models.database import Base, User
@@ -14,7 +16,7 @@ load_dotenv()
 
 DB_USER = os.getenv("POSTGRES_USER", "postgres")
 DB_PASSWORD = os.getenv("POSTGRES_PASSWORD", "postgres")
-DB_NAME = os.getenv("POSTGRES_DB", "RAG_bot_database")
+DB_NAME = os.getenv("POSTGRES_DB", "rag_bot_database")
 DB_HOST = os.getenv("POSTGRES_HOST", "localhost")
 DB_PORT = os.getenv("POSTGRES_PORT", "5432")
 DATABASE_URL = f"postgresql+asyncpg://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
@@ -38,11 +40,17 @@ class Database:
         await self.engine.dispose()
         logger.info("A database connection has been closed.")
 
-    async def add_user(self, cookies_id: str, thread_id: str):
-        async with self.async_session() as session:
-            stmt = insert(User).values(
-                cookies_id=cookies_id,
-                thread_id=thread_id,
-            )
-            await session.execute(stmt)
-            await session.commit()
+    async def add_user(self, cookies_id: str, thread_id: str) -> bool:
+        try:
+            async with self.async_session() as session:
+                stmt = insert(User).values(
+                    cookies_id=cookies_id,
+                    thread_id=thread_id,
+                )
+                await session.execute(stmt)
+                await session.commit()
+                return True
+        except IntegrityError as err:
+            raise HTTPException(
+                status_code=409, detail="User with this thread_id or cookies_id already exists"
+            ) from err

@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 from collections.abc import AsyncGenerator
@@ -62,8 +63,8 @@ class Agent:
 
     def _build_tools(self) -> list[BaseTool]:
 
-        def search_docs(query: str) -> list[dict]:
-            docs = self.retriever.invoke(query)
+        async def search_docs(query: str) -> list[dict]:
+            docs = await asyncio.to_thread(self.retriever.invoke, query)
             logger.info("Tool call: search_docs | query=%s | docs_found=%d", query, len(docs))
 
             response = [
@@ -78,7 +79,7 @@ class Agent:
             return response
 
         func_tool = StructuredTool.from_function(
-            func=search_docs,
+            coroutine=search_docs,
             name="search_docs",
             description="""Find the information you need in the documentation.
     Returns a list of objects with: text, source, chunk_index.""",

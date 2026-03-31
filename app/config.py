@@ -16,6 +16,8 @@ PATH_TO_PAGES_FOLDER.mkdir(parents=True, exist_ok=True)
 PATH_TO_CHROMADB.mkdir(parents=True, exist_ok=True)
 
 # LLM variables
+encoding_model = None
+langchain_embedding = None
 COLLECTION_NAME = "langchain-docs"
 DEVICE_FOR_MODELS = "cuda" if torch.cuda.is_available() else "cpu"
 LLM_MODEL_NAME = "gemini-3.1-flash-lite-preview"  # gemini-3.1-flash-lite-preview  gemini-2.5-flash-lite
@@ -69,11 +71,16 @@ Your primary goal is to provide accurate, up-to-date, and factual answers.
 Your answers must be grounded in the retrieved documentation whenever possible.
 """
 
+
 # Models
-encoding_model = tiktoken.get_encoding("o200k_base")
-langchain_embedding = HuggingFaceEmbeddings(
-    model_name="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
-    model_kwargs={"device": DEVICE_FOR_MODELS},
-    encode_kwargs={"normalize_embeddings": True},
-    cache_folder=str(PATH_TO_MODEL_DIRECTORY),
-)
+def get_embedding() -> HuggingFaceEmbeddings:
+    return HuggingFaceEmbeddings(
+        model_name="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+        model_kwargs={"device": DEVICE_FOR_MODELS},
+        encode_kwargs={"normalize_embeddings": True},
+        cache_folder=str(PATH_TO_MODEL_DIRECTORY),
+    )
+
+
+def get_encoding() -> tiktoken.Encoding:
+    return tiktoken.get_encoding("o200k_base")
