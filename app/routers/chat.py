@@ -3,7 +3,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from app.models.agent import AgentResult
-from app.models.api import ChatRequest
+from app.models.api import ChatRequest, ProgressResponse
 from app.services.agent import Agent
 
 router = APIRouter(prefix="/chat")
@@ -11,6 +11,16 @@ router = APIRouter(prefix="/chat")
 
 def get_agent(request: Request) -> Agent:
     return request.app.state.agent
+
+
+@router.get("/", response_model=ProgressResponse)
+async def main_page(request: Request):
+    return ProgressResponse(
+        progress=request.app.state.progress,
+        status=request.app.state.status,
+        is_ready=request.app.state.is_ready,
+        error=request.app.state.error,
+    )
 
 
 @router.post("/process_message", response_model=AgentResult)

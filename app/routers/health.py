@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Request
 
-from app.models.api import HealthResponse
+from app.models.api import HealthResponse, ProgressResponse
 
 router = APIRouter(prefix="/health")
 
@@ -12,9 +12,9 @@ async def get_health():
 
 @router.get("/status")
 async def status(request: Request):
-    return {
-        "ready": request.app.state.is_ready,
-        "status": request.app.state.status,
-        "progress": request.app.state.progress,
-        "error": request.app.state.error,
-    }
+    return ProgressResponse(
+        progress=request.app.state.progress,
+        status=request.app.state.status,
+        is_ready=request.app.state.is_ready,
+        error=request.app.state.error,
+    )

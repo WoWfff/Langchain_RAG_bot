@@ -5,11 +5,13 @@ import torch
 from langchain_huggingface import HuggingFaceEmbeddings
 
 # Pathes
-PATH_TO_ROOT_FOLDER = pathlib.Path(__file__).resolve().parent
+PATH_TO_ROOT_FOLDER = pathlib.Path(__file__).resolve().parent.parent
 PATH_TO_DATA_FOLDER = PATH_TO_ROOT_FOLDER / "data"
 PATH_TO_URLS_FILE = PATH_TO_DATA_FOLDER / "urls.txt"
 PATH_TO_PAGES_FOLDER = PATH_TO_DATA_FOLDER / "pages"
 PATH_TO_CHROMADB = PATH_TO_DATA_FOLDER / "chromadb"
+PATH_TO_MODEL_DIRECTORY = PATH_TO_DATA_FOLDER / "models"
+PATH_TO_MODEL_DIRECTORY.mkdir(parents=True, exist_ok=True)
 PATH_TO_PAGES_FOLDER.mkdir(parents=True, exist_ok=True)
 PATH_TO_CHROMADB.mkdir(parents=True, exist_ok=True)
 
@@ -73,4 +75,5 @@ langchain_embedding = HuggingFaceEmbeddings(
     model_name="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
     model_kwargs={"device": DEVICE_FOR_MODELS},
     encode_kwargs={"normalize_embeddings": True},
+    cache_folder=str(PATH_TO_MODEL_DIRECTORY),
 )

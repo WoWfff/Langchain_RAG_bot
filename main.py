@@ -42,7 +42,7 @@ async def init_agent(app: FastAPI):
             embedding=langchain_embedding,
             encoding_model=encoding_model,
             collection_name=COLLECTION_NAME,
-            skip_downloading=False,
+            skip_downloading=True,
         )
 
         app.state.progress = 50
@@ -58,7 +58,7 @@ async def init_agent(app: FastAPI):
         app.state.agent = agent
         app.state.is_ready = True
         app.state.progress = 100
-        app.state.status = "Done."
+        app.state.status = "Ready"
 
     except Exception as e:  # noqa: BLE001
         app.state.error = str(e)

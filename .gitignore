@@ -12,5 +12,6 @@ wheels/
 data/urls.txt
 data/pages/*.md
 data/chromadb/*
+data/models/*
 .envrc
 .env
