@@ -1,6 +1,5 @@
 import asyncio
 import logging
-from contextlib import asynccontextmanager
 from os import getenv
 
 from app.config import (
@@ -14,12 +13,10 @@ from app.config import (
     get_embedding,
     get_encoding,
 )
-from app.routers import chat, database, health
 from app.services.agent import Agent
 from app.services.database import Database
 from app.services.retrieve import ingest_docs_to_chromadb
 from dotenv import load_dotenv
-from fastapi import FastAPI
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from psycopg.rows import dict_row
 from psycopg_pool import AsyncConnectionPool
@@ -35,17 +32,12 @@ if not GEMINI_API_KEY:
     raise ValueError("API key not found in .env")
 
 
-async def init_services(app: FastAPI, checkpointer):
+async def init_services(checkpointer) -> Agent:
     try:
-        app.state.status = "Loading models..."
-        app.state.progress = 5
-
         embedding_model, encoding_model = await asyncio.gather(
             asyncio.to_thread(get_embedding),
             asyncio.to_thread(get_encoding),
         )
-        app.state.status = "Setting chromadb..."
-        app.state.progress = 10
 
         await ingest_docs_to_chromadb(
             path_to_chromadb=PATH_TO_CHROMADB,
@@ -57,9 +49,7 @@ async def init_services(app: FastAPI, checkpointer):
             skip_downloading=True,
         )
 
-        app.state.progress = 50
-        app.state.status = "Initialising AI-agent..."
-        agent = Agent(
+        return Agent(
             path_to_chromadb=PATH_TO_CHROMADB,
             embedding=embedding_model,
             collection_name=COLLECTION_NAME,
@@ -68,19 +58,13 @@ async def init_services(app: FastAPI, checkpointer):
             checkpointer=checkpointer,
         )
 
-        app.state.agent = agent
-        app.state.is_ready = True
-        app.state.progress = 100
-        app.state.status = "Ready"
-
-    except Exception as err:  # noqa: BLE001
+    except Exception:
         logger.error("init_services failed")
-        app.state.error = str(err)
-        app.state.is_ready = False
+        raise
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
+# TEST
+async def test():
     db = Database()
     await db.connect()
 
@@ -91,28 +75,16 @@ async def lifespan(app: FastAPI):
         open=False,
     )
     await pool.open()
-    checkpointer = AsyncPostgresSaver(conn=pool)  # type: ignore
+    checkpointer = AsyncPostgresSaver(pool)  # type: ignore
     await checkpointer.setup()
+    agent = await init_services(checkpointer)
+    result = []
 
-    app.state.database = db
-    app.state.checkpointer = checkpointer
-    app.state.pg_pool = pool
-    app.state.agent = None
-    app.state.progress = 0
-    app.state.status = None
-    app.state.is_ready = False
-    app.state.error = None
-    app.state.thread_id = None
+    async for msg in agent.stream_message("what is langchain?", "11", debug=False):
+        result.append(msg)
 
-    asyncio.create_task(init_services(app, checkpointer))  # noqa: RUF006
-
-    yield
-    await pool.close()
-    await db.close()
+    proccess = await agent.process_message("what is langgraph in relation to langchain?", "12", debug=False)
+    print()
 
 
-app = FastAPI(lifespan=lifespan)
-
-app.include_router(health.router)
-app.include_router(chat.router)
-app.include_router(database.router)
+asyncio.run(test())

@@ -5,18 +5,17 @@ from collections.abc import AsyncGenerator
 from pathlib import Path
 
 from langchain.agents import create_agent
+from langchain.messages import HumanMessage, ToolMessage
 from langchain_chroma import Chroma
 from langchain_core.embeddings import Embeddings
 from langchain_core.tools import BaseTool, StructuredTool
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langgraph.checkpoint.memory import MemorySaver
 from langgraph.types import GraphOutput
 
 from app.models.agent import AgentResult, ToolInput, ToolResponse
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-memory = MemorySaver()
 
 
 def search(query: str) -> str:
@@ -31,6 +30,7 @@ class Agent:
         collection_name: str,
         system_prompt: str,
         model_name: str,
+        checkpointer,
     ):
         try:
             self.db = Chroma(
@@ -55,7 +55,7 @@ class Agent:
                 model=self.model,
                 tools=[*self.tools],
                 system_prompt=system_prompt,
-                checkpointer=memory,
+                checkpointer=checkpointer,
             )
 
         except Exception as err:
@@ -88,38 +88,54 @@ class Agent:
 
         return [func_tool]
 
-    def extract_tool_data(self, message) -> list[dict]:
+    def extract_tool_data(self, message: str) -> list[dict]:
         tool_results = []
 
         try:
-            tool_results.extend(json.loads(message.content))
+            tool_results.extend(json.loads(message))
         except Exception:  # noqa: BLE001
             pass
 
         return tool_results
 
-    def extract_tool_response(self, response: dict) -> list[dict]:
-        messages = response.get("messages", [])
+    def extract_tool_response_for_stream_message(self, token: ToolMessage) -> list[dict]:
+        if getattr(token, "status", None) == "success" and getattr(token, "type", None) == "tool":
+            content = getattr(token, "content", None)
+            result = self.extract_tool_data(content) if content else None
+        return result or []
 
-        result: list[dict] = []
+    def extract_tool_response_for_process_message(self, response: list[dict]) -> list[dict]:
+        for msg in response:
+            data = msg.get("data", ())
+            tools = data.get("tools", {})
+            messages = tools.get("messages", [])
 
-        for msg in messages:
-            if msg.type == "tool" and msg.name == "search_docs":
-                result = self.extract_tool_data(message=msg)
+            for message in messages:
+                if getattr(message, "status", None) == "success" and getattr(message, "type", None) == "tool":
+                    if hasattr(message, "content") and message.content:
+                        result = self.extract_tool_data(message=message.content)
+                        return result
+        return []
 
-        return result
+    def extract_ai_response_from_procces_message(self, response: list[dict]) -> str | None:
+        for msg in reversed(response):
+            data = msg.get("data", ())
+            updates = data.get("model", {})
+            messages = updates.get("messages", [])
 
-    def extract_ai_response_from_procces_message(self, response: dict) -> str | None:
-        for msg in reversed(response["messages"]):
-            if getattr(msg, "type", None) == "ai":
-                return msg.text
+            for message in messages:
+                if getattr(message, "type", None) == "ai":
+                    result = getattr(message, "text", None)
+
+            return result or None
+
         return None
 
     def extract_ai_response_from_stream_message(self, message) -> list[dict] | None:
         result = None
 
         if hasattr(message, "type") and hasattr(message, "text"):
-            if message.type != "tool" or message.status != "success":
+            if message.type != "tool" or getattr(message, "status", None) != "success":
                 return None
 
             result = self.extract_tool_data(message)
@@ -134,15 +150,19 @@ class Agent:
     ) -> GraphOutput | AgentResult:
         try:
             result: GraphOutput = await self.agent.ainvoke(
-                input={"messages": [{"role": "user", "content": message}]},
+                input={
+                    "messages": [HumanMessage(content=message)],
+                },
+                stream_mode="updates",
                 version="v2",
                 config={"configurable": {"thread_id": thread_id}},
             )  # type: ignore
-            tool_response = self.extract_tool_response(response=result.value)
-            text = self.extract_ai_response_from_procces_message(response=result.value)
 
             if debug:
                 return result
+
+            text = self.extract_ai_response_from_procces_message(response=result)  # type: ignore
+            tool_response = self.extract_tool_response_for_process_message(response=result)  # type: ignore
 
             return AgentResult(response_text=text, tool_response=tool_response)
 
@@ -158,7 +178,7 @@ class Agent:
         try:
             async for chunk in self.agent.astream(
                 input={"messages": [{"role": "user", "content": message}]},
-                stream_mode=["messages", "values"],
+                stream_mode=["messages"],
                 version="v2",
                 config={"configurable": {"thread_id": thread_id}},
             ):  # type: ignore
@@ -176,15 +196,13 @@ class Agent:
                                         continue
                                     yield AgentResult(response_text=block["text"], tool_response=None)  # type: ignore
 
-                            else:
-                                if getattr(token, "text", None):
-                                    yield AgentResult(response_text=token.text, tool_response=None)
-
-                    elif chunk["type"] == "values":
-                        messages = chunk.get("data", {}).get("messages", [])  # type: ignore
-                        for msg in messages:
-                            tool_reponse = self.extract_ai_response_from_stream_message(message=msg)  # type: ignore
-                            yield AgentResult(response_text=None, tool_response=tool_reponse)
+                        if metadata and metadata.get("langgraph_node") == "tools":
+                            tool_response = (
+                                self.extract_tool_response_for_stream_message(token=token)
+                                if isinstance(token, ToolMessage)
+                                else None
+                            )
+                            yield AgentResult(response_text=None, tool_response=tool_response)
 
         except Exception as err:
-            raise ValueError("Error while processing user message.") from err
+            raise ValueError(f"Error while processing user message: {err}") from err

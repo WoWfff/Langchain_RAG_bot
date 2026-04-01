@@ -1,3 +1,4 @@
+import os
 import pathlib
 
 import tiktoken
@@ -14,6 +15,16 @@ PATH_TO_MODEL_DIRECTORY = PATH_TO_DATA_FOLDER / "models"
 PATH_TO_MODEL_DIRECTORY.mkdir(parents=True, exist_ok=True)
 PATH_TO_PAGES_FOLDER.mkdir(parents=True, exist_ok=True)
 PATH_TO_CHROMADB.mkdir(parents=True, exist_ok=True)
+
+# Database
+DB_USER = os.getenv("POSTGRES_USER", "postgres")
+DB_PASSWORD = os.getenv("POSTGRES_PASSWORD", "postgres")
+DB_NAME = os.getenv("POSTGRES_DB", "rag_bot_database")
+DB_HOST = os.getenv("POSTGRES_HOST", "localhost")
+DB_PORT = os.getenv("POSTGRES_PORT", "5432")
+DB_SSLMODE = os.getenv("POSTGRES_SSLMODE", "prefer")
+DATABASE_URL = f"postgresql+asyncpg://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+PSYCOPG_URL = f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}?sslmode={DB_SSLMODE}"
 
 # LLM variables
 encoding_model = None
