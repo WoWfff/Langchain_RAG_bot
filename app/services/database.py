@@ -2,12 +2,12 @@ import logging
 
 from dotenv import load_dotenv
 from fastapi import HTTPException
-from sqlalchemy import insert
+from sqlalchemy import insert, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.config import DATABASE_URL
-from app.models.database import Base, User
+from app.models.database import Base, Thread, User
 
 # Configuration
 logging.basicConfig(level=logging.INFO)
@@ -33,17 +33,51 @@ class Database:
         await self.engine.dispose()
         logger.info("A database connection has been closed.")
 
-    async def add_user(self, cookies_id: str, thread_id: str) -> bool:
+    async def add_user(self, cookies_id: str) -> User:
         try:
             async with self.async_session() as session:
-                stmt = insert(User).values(
-                    cookies_id=cookies_id,
-                    thread_id=thread_id,
+                stmt = (
+                    insert(User)
+                    .values(
+                        cookies_id=cookies_id,
+                    )
+                    .returning(User)
                 )
-                await session.execute(stmt)
+                result = await session.execute(stmt)
+                user = result.scalar_one()
                 await session.commit()
-                return True
+
+                return user
+
         except IntegrityError as err:
-            raise HTTPException(
-                status_code=409, detail="User with this thread_id or cookies_id already exists"
-            ) from err
+            raise HTTPException(status_code=409, detail="User with this cookies_id already exists") from err
+
+    async def get_user_by_cookies_id(self, cookies_id: str) -> User | None:
+        async with self.async_session() as session:
+            stmt = select(User).where(User.cookies_id == cookies_id)
+            result = await session.execute(stmt)
+            return result.scalar_one_or_none()
+
+    async def add_thread(self, user_id: int, thread_id: str) -> Thread:
+        try:
+            async with self.async_session() as session:
+                stmt = insert(Thread).values(thread_id=thread_id, user_id=user_id).returning(Thread)
+                result = await session.execute(stmt)
+                thread = result.scalar_one()
+                await session.commit()
+                return thread
+
+        except IntegrityError as err:
+            raise HTTPException(status_code=409, detail="Thread with this thread_id already exists") from err
+
+    async def get_thread_by_id(self, thread_id: str) -> Thread | None:
+        async with self.async_session() as session:
+            stmt = select(Thread).where(Thread.thread_id == thread_id)
+            result = await session.execute(stmt)
+            return result.scalar_one_or_none()
+
+    async def get_user_threads(self, user_id: int) -> list[Thread]:
+        async with self.async_session() as session:
+            stmt = select(Thread).where(Thread.user_id == user_id)
+            result = await session.execute(stmt)
+            return list(result.scalars().all())

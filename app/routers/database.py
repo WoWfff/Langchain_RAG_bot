@@ -17,7 +17,6 @@ async def add_user(request: AddUserRequest, database: Annotated[Database, Depend
     try:
         await database.add_user(
             cookies_id=request.cookies_id,
-            thread_id=request.thread_id,
         )
         return {"status": "ok"}
     except Exception as err:
