@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from pydantic import BaseModel
 
 
@@ -19,3 +21,8 @@ class ProgressResponse(BaseModel):
 class AddUserRequest(BaseModel):
     cookies_id: str
     thread_id: str
+
+
+class ThreadResponse(BaseModel):
+    thread_id: str
+    created_at: datetime

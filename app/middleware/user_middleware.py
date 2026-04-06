@@ -26,9 +26,13 @@ class UserMiddleware(BaseHTTPMiddleware):
             user = await db.add_user(cookies_id=cookies_id)  # type: ignore
             logger.info(f"Created new user: {user.id}")
 
-        thread_id = str(uuid4())
-        await db.add_thread(user_id=user.id, thread_id=thread_id)
-        logger.info(f"Created thread: {thread_id} for user: {user.id}")
+        if user.active_thread_id:
+            thread_id = user.active_thread_id
+            logger.info(f"Using active thread: {thread_id}")
+        else:
+            thread = await db.create_and_set_active_thread(user_id=user.id)
+            thread_id = thread.thread_id
+            logger.info(f"Created thread: {thread.thread_id} for user: {user.id}")
 
         request.state.user_id = user.id
         request.state.thread_id = thread_id
@@ -40,6 +44,6 @@ class UserMiddleware(BaseHTTPMiddleware):
             value=cookies_id,
             httponly=True,
             samesite="lax",
-            max_age=30 * 24 * 60 * 60  # 30 days
+            max_age=30 * 24 * 60 * 60,  # 30 days
         )
         return response

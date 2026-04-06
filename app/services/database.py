@@ -1,8 +1,9 @@
 import logging
+from uuid import uuid4
 
 from dotenv import load_dotenv
 from fastapi import HTTPException
-from sqlalchemy import insert, select
+from sqlalchemy import insert, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
@@ -81,3 +82,15 @@ class Database:
             stmt = select(Thread).where(Thread.user_id == user_id)
             result = await session.execute(stmt)
             return list(result.scalars().all())
+
+    async def set_active_thread(self, user_id: int, thread_id: str) -> None:
+        async with self.async_session() as session:
+            stmt = update(User).where(User.id == user_id).values(active_thread_id=thread_id)
+            await session.execute(stmt)
+            await session.commit()
+
+    async def create_and_set_active_thread(self, user_id: int) -> Thread:
+        thread_id = str(uuid4())
+        thread = await self.add_thread(user_id=user_id, thread_id=thread_id)
+        await self.set_active_thread(user_id=user_id, thread_id=thread_id)
+        return thread
