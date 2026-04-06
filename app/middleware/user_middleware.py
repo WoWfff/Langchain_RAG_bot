@@ -12,7 +12,9 @@ logger = logging.getLogger(__name__)
 
 class UserMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
-        if not request.url.path.startswith("/chat"):
+        protected_paths = ["/chat", "/threads"]
+
+        if not any(request.url.path.startswith(path) for path in protected_paths):
             return await call_next(request)
 
         db: Database = request.app.state.database

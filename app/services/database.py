@@ -3,7 +3,7 @@ from uuid import uuid4
 
 from dotenv import load_dotenv
 from fastapi import HTTPException
-from sqlalchemy import delete, insert, select, update
+from sqlalchemy import delete, insert, select, text, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
@@ -104,6 +104,20 @@ class Database:
 
     async def delete_thread(self, thread_id: str) -> None:
         async with self.async_session() as session:
+            # 1. Delete blobs
+            await session.execute(
+                text("DELETE FROM checkpoint_blobs WHERE thread_id = :thread_id"), {"thread_id": thread_id}
+            )
+
+            # 2. Delete writes
+            await session.execute(
+                text("DELETE FROM checkpoint_writes WHERE thread_id = :thread_id"), {"thread_id": thread_id}
+            )
+
+            # 3. Delete checkpoints
+            await session.execute(
+                text("DELETE FROM checkpoints WHERE thread_id = :thread_id"), {"thread_id": thread_id}
+            )
             stmt_delete = delete(Thread).where(Thread.thread_id == thread_id)
             await session.execute(stmt_delete)
             await session.commit()
@@ -115,6 +129,20 @@ class Database:
             raise HTTPException(status_code=404, detail="Thread not found")
 
         async with self.async_session() as session:
+            # 1. Delete blobs
+            await session.execute(
+                text("DELETE FROM checkpoint_blobs WHERE thread_id = :thread_id"), {"thread_id": thread_id}
+            )
+
+            # 2. Delete writes
+            await session.execute(
+                text("DELETE FROM checkpoint_writes WHERE thread_id = :thread_id"), {"thread_id": thread_id}
+            )
+
+            # 3. Delete checkpoints
+            await session.execute(
+                text("DELETE FROM checkpoints WHERE thread_id = :thread_id"), {"thread_id": thread_id}
+            )
             stmt_user = select(User).where(User.id == user_id)
             result = await session.execute(stmt_user)
             user = result.scalar_one_or_none()

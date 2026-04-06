@@ -15,7 +15,7 @@ from app.config import (
     get_encoding,
 )
 from app.middleware.user_middleware import UserMiddleware
-from app.routers import chat, database, health
+from app.routers import chat, database, health, threads
 from app.services.agent import Agent
 from app.services.database import Database
 from app.services.retrieve import ingest_docs_to_chromadb
@@ -118,3 +118,4 @@ app.add_middleware(UserMiddleware)
 app.include_router(health.router)
 app.include_router(chat.router)
 app.include_router(database.router)
+app.include_router(threads.router)

@@ -2,7 +2,7 @@ from fastapi import APIRouter, Request
 
 from app.models.api import HealthResponse, ProgressResponse
 
-router = APIRouter(prefix="/health")
+router = APIRouter(prefix="/health", tags=["Health"])
 
 
 @router.get("/", response_model=HealthResponse)

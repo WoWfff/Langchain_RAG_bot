@@ -1,6 +1,7 @@
 # Requirements
 
 * Python 3.13+
+* PostgreSQL
 * Gemini API Key
 * uv (recommended)
 * direnv (optional)
@@ -49,13 +50,19 @@ python3 -m pip install -r requirements.txt
 ---
 
 ## ⚠️ After installation
-   Execute:
 
+1. Copy environment file:
    ```bash
    cp .env.example .env
    ```
-   Then write your Gemini API key into .env file
 
+2. Configure your `.env` file with:
+   - `GEMINI_API_KEY` - Your Gemini API key
+   - `POSTGRES_USER` - PostgreSQL username (default: postgres)
+   - `POSTGRES_PASSWORD` - PostgreSQL password
+   - `POSTGRES_DB` - Database name (default: rag_bot_database)
+   - `POSTGRES_HOST` - Database host (default: localhost)
+   - `POSTGRES_PORT` - Database port (default: 5432)
 
 ---
 
@@ -72,3 +79,33 @@ uv run main.py
 ```bash
 python3 main.py
 ```
+
+---
+
+# 🔌 API Endpoints
+
+## Chat
+- `GET /chat/` - Get initialization status
+- `POST /chat/process_message` - Send message to AI agent
+
+## Threads Management
+- `GET /threads/` - List all user threads
+- `POST /threads/new` - Create new conversation thread
+- `POST /threads/{thread_id}/activate` - Switch to specific thread
+- `DELETE /threads/{thread_id}` - Delete thread (cannot delete active thread)
+
+## Health
+- `GET /health` - Check service health
+
+---
+
+# 🗄️ Database
+
+The application uses PostgreSQL with the following tables:
+- `users` - User accounts with session management
+- `threads` - Conversation threads
+- `checkpoints` - LangGraph conversation state (auto-created)
+- `checkpoint_writes` - LangGraph state writes (auto-created)
+- `checkpoint_blobs` - LangGraph binary data (auto-created)
+
+User sessions are managed via cookies, and conversation history is preserved across page reloads.

@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from app.models.api import AddUserRequest, DeleteThreadRequest
 from app.services.database import Database
 
-router = APIRouter(prefix="/database")
+router = APIRouter(prefix="/database", tags=["DEBUG"])
 
 
 def get_db(request: Request) -> Database:
