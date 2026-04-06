@@ -3,7 +3,7 @@ from uuid import uuid4
 
 from dotenv import load_dotenv
 from fastapi import HTTPException
-from sqlalchemy import insert, select, update
+from sqlalchemy import delete, insert, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
@@ -94,3 +94,36 @@ class Database:
         thread = await self.add_thread(user_id=user_id, thread_id=thread_id)
         await self.set_active_thread(user_id=user_id, thread_id=thread_id)
         return thread
+
+    async def get_user_by_id(self, user_id: int) -> User | None:
+        async with self.async_session() as session:
+            stmt = select(User).where(User.id == user_id)
+
+            result = await session.execute(stmt)
+            return result.scalar_one_or_none()
+
+    async def delete_thread(self, thread_id: str) -> None:
+        async with self.async_session() as session:
+            stmt_delete = delete(Thread).where(Thread.thread_id == thread_id)
+            await session.execute(stmt_delete)
+            await session.commit()
+
+    async def remove_user_thread(self, user_id: int, thread_id: str) -> None:
+        thread = await self.get_thread_by_id(thread_id=thread_id)
+
+        if not thread or thread.user_id != user_id:
+            raise HTTPException(status_code=404, detail="Thread not found")
+
+        async with self.async_session() as session:
+            stmt_user = select(User).where(User.id == user_id)
+            result = await session.execute(stmt_user)
+            user = result.scalar_one_or_none()
+
+            if user and user.active_thread_id == thread_id:
+                stmt_update = update(User).where(User.id == user_id).values(active_thread_id=None)
+                await session.execute(stmt_update)
+
+            stmt_delete = delete(Thread).where(Thread.thread_id == thread_id)
+            await session.execute(stmt_delete)
+
+            await session.commit()

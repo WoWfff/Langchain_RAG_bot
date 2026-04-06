@@ -20,6 +20,10 @@ class ProgressResponse(BaseModel):
 
 class AddUserRequest(BaseModel):
     cookies_id: str
+    thread_id: str | None
+
+
+class DeleteThreadRequest(BaseModel):
     thread_id: str
 
 
