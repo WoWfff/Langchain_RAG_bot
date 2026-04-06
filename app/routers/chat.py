@@ -3,8 +3,9 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from app.models.agent import AgentResult
-from app.models.api import ChatRequest, ProgressResponse
+from app.models.api import ChatRequest
 from app.services.agent import Agent
+from app.services.database import Database
 
 router = APIRouter(prefix="/chat")
 
@@ -13,22 +14,20 @@ def get_agent(request: Request) -> Agent:
     return request.app.state.agent
 
 
-@router.get("/", response_model=ProgressResponse)
+@router.get("/")
 async def main_page(request: Request):
-    return ProgressResponse(
-        progress=request.app.state.progress,
-        status=request.app.state.status,
-        is_ready=request.app.state.is_ready,
-        error=request.app.state.error,
-    )
+    db: Database = request.app.state.database
+    threads = await db.get_user_threads(user_id=request.state.user_id)
+    return [thread.thread_id for thread in threads]
 
 
 @router.post("/process_message", response_model=AgentResult)
 async def process_message(
+    request: Request,
     request_data: ChatRequest,
     agent: Annotated[Agent, Depends(get_agent)],
 ):
-    result = await agent.process_message(message=request_data.message, thread_id=request_data.thread_id)
+    result = await agent.process_message(message=request_data.message, thread_id=request.state.thread_id)
 
     if not isinstance(result, AgentResult):
         raise HTTPException(500, detail="Invalid agent response")

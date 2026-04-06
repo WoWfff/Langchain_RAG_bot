@@ -14,6 +14,7 @@ from app.config import (
     get_embedding,
     get_encoding,
 )
+from app.middleware.user_middleware import UserMiddleware
 from app.routers import chat, database, health
 from app.services.agent import Agent
 from app.services.database import Database
@@ -112,6 +113,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+app.add_middleware(UserMiddleware)
 
 app.include_router(health.router)
 app.include_router(chat.router)
