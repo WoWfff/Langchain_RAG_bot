@@ -176,6 +176,8 @@ class Agent:
         debug: bool = False,
     ) -> AsyncGenerator[AgentResult | dict]:
         try:
+            accumulated_sources = []
+
             async for chunk in self.agent.astream(
                 input={"messages": [{"role": "user", "content": message}]},
                 stream_mode=["messages"],
@@ -202,7 +204,9 @@ class Agent:
                                 if isinstance(token, ToolMessage)
                                 else None
                             )
-                            yield AgentResult(response_text=None, tool_response=tool_response)
+                            if tool_response:
+                                accumulated_sources.extend(tool_response)
+                                yield AgentResult(response_text=None, tool_response=accumulated_sources)
 
         except Exception as err:
             raise ValueError(f"Error while processing user message: {err}") from err
@@ -218,32 +222,22 @@ class Agent:
                     msg_type = getattr(msg, "type", None)
 
                     if msg_type == "human":
-                        messages.append({
-                            "role": "user",
-                            "content": getattr(msg, "content", "")
-                        })
-                    elif msg_type == "ai":
-                        content = getattr(msg, "content", "")
-                        if isinstance(content, list):
-                            text_content = ""
-                            for block in content:
-                                if isinstance(block, dict) and block.get("type") == "text":
-                                    text_content += block.get("text", "")
-                            content = text_content
+                        messages.append({"role": "user", "content": getattr(msg, "content", "")})
 
-                        if content and content.strip():
-                            new_msg = {
-                                "role": "assistant",
-                                "content": content
-                            }
+                    elif msg_type == "ai":
+                        text = getattr(msg, "text", "")
+
+                        if text and text.strip():
+                            new_msg = {"role": "assistant", "content": text}
                             if pending_sources:
                                 new_msg["sources"] = pending_sources
                                 pending_sources = None
                             messages.append(new_msg)
+
                     elif msg_type == "tool":
-                        if hasattr(msg, "content") and msg.content:
+                        if hasattr(msg, "text") and msg.text:
                             try:
-                                tool_data = json.loads(msg.content)
+                                tool_data = json.loads(msg.text)
                                 pending_sources = tool_data
                             except json.JSONDecodeError:
                                 pass
