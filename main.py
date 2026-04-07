@@ -21,6 +21,8 @@ from app.services.database import Database
 from app.services.retrieve import ingest_docs_to_chromadb
 from dotenv import load_dotenv
 from fastapi import FastAPI
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from psycopg.rows import dict_row
 from psycopg_pool import AsyncConnectionPool
@@ -115,7 +117,16 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 app.add_middleware(UserMiddleware)
 
+# Mount static files
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
 app.include_router(health.router)
 app.include_router(chat.router)
 app.include_router(database.router)
 app.include_router(threads.router)
+
+
+@app.get("/")
+async def root():
+    """Serve the main HTML page"""
+    return FileResponse("static/index.html")

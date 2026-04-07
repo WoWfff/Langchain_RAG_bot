@@ -31,7 +31,7 @@ encoding_model = None
 langchain_embedding = None
 COLLECTION_NAME = "langchain-docs"
 DEVICE_FOR_MODELS = "cuda" if torch.cuda.is_available() else "cpu"
-LLM_MODEL_NAME = "gemini-2.5-flash-lite"  # gemini-3.1-flash-lite-preview  gemini-2.5-flash-lite
+LLM_MODEL_NAME = "gemini-3-flash"  # gemini-3.1-flash-lite-preview  gemini-2.5-flash-lite
 SYSTEM_PROMPT = """You are a technical assistant specialized in LangChain and its ecosystem.
 
 You have access to a tool called `search_docs` that retrieves relevant information from LangChain documentation.

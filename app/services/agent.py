@@ -206,3 +206,49 @@ class Agent:
 
         except Exception as err:
             raise ValueError(f"Error while processing user message: {err}") from err
+
+    async def get_thread_history(self, thread_id: str) -> list[dict]:
+        try:
+            state = await self.agent.aget_state(config={"configurable": {"thread_id": thread_id}})
+            messages = []
+            pending_sources = None
+
+            if state and hasattr(state, "values") and "messages" in state.values:
+                for msg in state.values["messages"]:
+                    msg_type = getattr(msg, "type", None)
+
+                    if msg_type == "human":
+                        messages.append({
+                            "role": "user",
+                            "content": getattr(msg, "content", "")
+                        })
+                    elif msg_type == "ai":
+                        content = getattr(msg, "content", "")
+                        if isinstance(content, list):
+                            text_content = ""
+                            for block in content:
+                                if isinstance(block, dict) and block.get("type") == "text":
+                                    text_content += block.get("text", "")
+                            content = text_content
+
+                        if content and content.strip():
+                            new_msg = {
+                                "role": "assistant",
+                                "content": content
+                            }
+                            if pending_sources:
+                                new_msg["sources"] = pending_sources
+                                pending_sources = None
+                            messages.append(new_msg)
+                    elif msg_type == "tool":
+                        if hasattr(msg, "content") and msg.content:
+                            try:
+                                tool_data = json.loads(msg.content)
+                                pending_sources = tool_data
+                            except json.JSONDecodeError:
+                                pass
+
+            return messages
+        except Exception as err:  # noqa: BLE001
+            logger.error(f"Failed to get thread history: {err}")
+            return []

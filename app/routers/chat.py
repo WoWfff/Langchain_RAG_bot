@@ -28,6 +28,19 @@ async def main_page(request: Request):
     return [thread.thread_id for thread in threads]
 
 
+@router.get("/history/{thread_id}")
+async def get_history(
+    thread_id: str,
+    request: Request,
+    agent: Annotated[Agent, Depends(get_agent)],
+):
+    try:
+        history = await agent.get_thread_history(thread_id=thread_id)
+        return {"messages": history}
+    except Exception as err:
+        raise HTTPException(500, detail=f"Failed to get history: {err}") from err
+
+
 @router.post("/process_message", response_model=AgentResult)
 async def process_message(
     request: Request,
