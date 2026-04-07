@@ -315,6 +315,18 @@ async function deleteThread(threadId) {
 // Load Messages
 async function loadMessages(threadId) {
     try {
+        // Check if there's an existing streaming or loading message for this thread BEFORE loading
+        const existingMessages = state.messages[threadId] || [];
+        const streamingMessage = existingMessages.find(msg => msg.streaming);
+        const loadingMessage = existingMessages.find(msg => msg.loading);
+        
+        // If there's a streaming or loading message, don't reload from API - just render what we have
+        if (streamingMessage || loadingMessage) {
+            console.log('Streaming or loading in progress, skipping API reload');
+            renderMessages();
+            return;
+        }
+        
         const historyUrl = `${API.chatHistory}/${threadId}`;
         const response = await fetch(historyUrl, {
             credentials: 'include'
@@ -326,10 +338,6 @@ async function loadMessages(threadId) {
         
         console.log('Loaded messages from API:', data.messages);
         
-        // Check if there's an existing streaming message for this thread
-        const existingMessages = state.messages[threadId] || [];
-        const streamingMessage = existingMessages.find(msg => msg.streaming);
-        
         // Transform messages from API format (role) to internal format (type)
         const transformedMessages = (data.messages || []).map(msg => {
             const transformed = {
@@ -340,12 +348,6 @@ async function loadMessages(threadId) {
             console.log('Transformed message:', transformed);
             return transformed;
         });
-        
-        // If there's a streaming message, append it to the loaded messages
-        if (streamingMessage) {
-            console.log('Preserving streaming message:', streamingMessage);
-            transformedMessages.push(streamingMessage);
-        }
         
         state.messages[threadId] = transformedMessages;
         renderMessages();
@@ -378,7 +380,7 @@ function renderMessages() {
     messages.forEach(msg => {
         const messageEl = createMessageElement(msg);
         
-        // Add data attribute for streaming messages
+        // Add data attribute for streaming/loading messages
         if (msg.id) {
             messageEl.setAttribute('data-message-id', msg.id);
             // Restore streaming state if exists
@@ -405,6 +407,10 @@ function renderMessages() {
                         messageEl.dataset.displayedText = streamState.displayedText;
                     }
                 }
+            }
+            // Loading messages always show cursor (no content to restore)
+            if (msg.loading) {
+                console.log('Rendering loading message with cursor:', msg.id);
             }
         }
         
@@ -454,10 +460,10 @@ function createMessageElement(msg) {
         `;
     }
     
-    // Handle streaming indicator and markdown
+    // Handle streaming/loading indicator and markdown
     let contentHtml;
-    if (msg.streaming) {
-        // During streaming, render markdown but keep the cursor
+    if (msg.streaming || msg.loading) {
+        // During streaming or loading, render markdown but keep the cursor
         const textWithoutCursor = msg.content.replace(/<span class="typing-indicator">.*?<\/span>/, '');
         contentHtml = renderMarkdown(textWithoutCursor) + '<span class="typing-indicator">▋</span>';
     } else {
@@ -580,6 +586,9 @@ function addUserMessage(content) {
 
 // Process Message (Non-streaming)
 async function processMessage(message) {
+    // Add loading message with cursor
+    const loadingMessageId = addLoadingMessage();
+    
     try {
         const response = await fetch(API.processMessage, {
             method: 'POST',
@@ -593,9 +602,42 @@ async function processMessage(message) {
         if (!response.ok) throw new Error('Failed to process message');
         
         const data = await response.json();
+        
+        // Remove loading message
+        removeLoadingMessage(loadingMessageId);
+        
+        // Add actual response
         addAssistantMessage(data);
     } catch (error) {
+        // Remove loading message on error
+        removeLoadingMessage(loadingMessageId);
         throw error;
+    }
+}
+
+// Add Loading Message
+function addLoadingMessage() {
+    const messages = state.messages[state.currentThreadId] || [];
+    const id = Date.now();
+    messages.push({
+        id: id,
+        type: 'assistant',
+        content: '',
+        sources: [],
+        loading: true
+    });
+    state.messages[state.currentThreadId] = messages;
+    renderMessages();
+    return id;
+}
+
+// Remove Loading Message
+function removeLoadingMessage(id) {
+    const messages = state.messages[state.currentThreadId] || [];
+    const index = messages.findIndex(m => m.id === id);
+    if (index !== -1) {
+        messages.splice(index, 1);
+        state.messages[state.currentThreadId] = messages;
     }
 }
 
@@ -767,19 +809,8 @@ function updateMessageElement(id, content, sources, isStreaming) {
             // Render the entire content with markdown
             const fullHtml = renderMarkdown(textWithoutCursor);
             
-            // Update content
+            // Update content smoothly without flashing
             contentWrapper.innerHTML = fullHtml;
-            
-            // Apply subtle flash animation
-            contentWrapper.style.transition = 'none';
-            contentWrapper.style.opacity = '0.6';
-            
-            // Force reflow
-            void contentWrapper.offsetHeight;
-            
-            // Fade back to full opacity
-            contentWrapper.style.transition = 'opacity 0.3s ease-out';
-            contentWrapper.style.opacity = '1';
             
             // Save streaming state for this thread
             const threadId = state.currentThreadId;
