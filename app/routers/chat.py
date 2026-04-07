@@ -1,6 +1,9 @@
+import json
+from collections.abc import AsyncIterable
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.sse import EventSourceResponse, ServerSentEvent
 
 from app.models.agent import AgentResult
 from app.models.api import ChatRequest
@@ -39,15 +42,23 @@ async def process_message(
     return result
 
 
-# @router.post("/stream_message")
-# async def stream_message(
-#     request_data: ChatRequest,
-#     agent: Annotated[Agent, Depends(get_agent)],
-# ):
-#     chunks = []
-
-#     async for chunk, tool_state in agent.stream_message(message=request_data.message, thread_id=request_data.thread_id):
-#         chunks.append(chunk)
-#         tool_state = tool_state
-
-#     return ChatResponse(message="".join(chunks), tool_usage=tool_state)
+@router.post("/stream_message", response_class=EventSourceResponse)
+async def stream_message(
+    request: Request,
+    request_data: ChatRequest,
+    agent: Annotated[Agent, Depends(get_agent)],
+) -> AsyncIterable[ServerSentEvent]:
+    try:
+        async for chunk in agent.stream_message(
+            message=request_data.message,
+            thread_id=request.state.thread_id,
+            debug=False,
+        ):
+            if isinstance(chunk, AgentResult):
+                if chunk.response_text or chunk.tool_response:
+                    yield ServerSentEvent(raw_data=json.dumps(chunk.model_dump(), ensure_ascii=False), event="chunk")
+    except Exception as err:  # noqa: BLE001
+        yield ServerSentEvent(
+            raw_data=json.dumps({"error": str(err)}, ensure_ascii=False),
+            event="error",
+        )
