@@ -78,13 +78,14 @@ async def test():
     checkpointer = AsyncPostgresSaver(pool)  # type: ignore
     await checkpointer.setup()
     agent = await init_services(checkpointer)
-    result = []
 
-    async for msg in agent.stream_message("what is langchain?", "11", debug=False):
-        result.append(msg)
+    result = await agent.get_thread_history("33f21a46-cb10-45c5-9f6e-ddf443283e85")
 
-    proccess = await agent.process_message("what is langgraph in relation to langchain?", "12", debug=False)
-    print()
+    # async for msg in agent.stream_message("what is langchain?", "11", debug=False):
+    #     result.append(msg)
+
+    # proccess = await agent.process_message("what is langgraph in relation to langchain?", "12", debug=False)
+    # print()
 
 
 asyncio.run(test())

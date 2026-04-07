@@ -129,4 +129,4 @@ app.include_router(threads.router)
 @app.get("/")
 async def root():
     """Serve the main HTML page"""
-    return FileResponse("static/index.html")
+    return FileResponse("templates/index.html")
