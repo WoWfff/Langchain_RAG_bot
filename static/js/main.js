@@ -17,7 +17,9 @@ const state = {
     threads: [],
     messages: {},
     streamingStates: {}, // Track streaming state per thread
-    theme: localStorage.getItem('theme') || 'dark'
+    theme: localStorage.getItem('theme') || 'dark',
+    pinnedThreads: JSON.parse(localStorage.getItem('pinnedThreads') || '[]'),
+    editingThreadId: null
 };
 
 // Initialize icons on page load
@@ -139,6 +141,13 @@ function setupEventListeners() {
     elements.messageInput.addEventListener('input', autoResizeTextarea);
     elements.themeToggle.addEventListener('click', toggleTheme);
     elements.backToLanding.addEventListener('click', showLandingPage);
+    
+    // Close dropdowns when clicking outside
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('.thread-actions')) {
+            closeAllDropdowns();
+        }
+    });
 }
 
 // Show Chat Interface
@@ -190,16 +199,25 @@ function renderThreads() {
         return;
     }
     
-    // Sort threads by creation date (newest first)
-    const sortedThreads = [...state.threads].sort((a, b) => 
-        new Date(b.created_at) - new Date(a.created_at)
-    );
+    // Sort threads: pinned first, then by creation date
+    const sortedThreads = [...state.threads].sort((a, b) => {
+        const aIsPinned = state.pinnedThreads.includes(a.thread_id);
+        const bIsPinned = state.pinnedThreads.includes(b.thread_id);
+        
+        if (aIsPinned && !bIsPinned) return -1;
+        if (!aIsPinned && bIsPinned) return 1;
+        
+        return new Date(b.created_at) - new Date(a.created_at);
+    });
     
     sortedThreads.forEach(thread => {
         const threadEl = document.createElement('div');
         threadEl.className = 'thread-item';
         if (thread.thread_id === state.currentThreadId) {
             threadEl.classList.add('active');
+        }
+        if (state.pinnedThreads.includes(thread.thread_id)) {
+            threadEl.classList.add('pinned');
         }
         
         const date = new Date(thread.created_at).toLocaleDateString('en-US', {
@@ -209,33 +227,90 @@ function renderThreads() {
             minute: '2-digit'
         });
         
+        const threadName = thread.name || `Chat ${thread.thread_id.slice(0, 8)}`;
+        const isPinned = state.pinnedThreads.includes(thread.thread_id);
+        
         threadEl.innerHTML = `
             <div class="thread-info">
-                <div class="thread-title">Chat ${thread.thread_id.slice(0, 8)}</div>
+                <div class="thread-title">
+                    <span class="pin-indicator" data-icon="pin"></span>
+                    <span class="thread-title-text">${threadName}</span>
+                </div>
                 <div class="thread-date">${date}</div>
             </div>
-            <button class="delete-thread-btn" data-thread-id="${thread.thread_id}" data-icon="trash"></button>
+            <div class="thread-actions">
+                <button class="thread-menu-btn" data-thread-id="${thread.thread_id}" data-icon="moreVertical"></button>
+                <div class="thread-dropdown">
+                    <button class="thread-dropdown-item rename-thread" data-thread-id="${thread.thread_id}">
+                        <span data-icon="edit"></span>
+                        <span>Rename</span>
+                    </button>
+                    <button class="thread-dropdown-item pin-thread" data-thread-id="${thread.thread_id}">
+                        <span data-icon="pin"></span>
+                        <span>${isPinned ? 'Unpin' : 'Pin'}</span>
+                    </button>
+                    <button class="thread-dropdown-item danger delete-thread" data-thread-id="${thread.thread_id}">
+                        <span data-icon="trash"></span>
+                        <span>Delete</span>
+                    </button>
+                </div>
+            </div>
         `;
         
-        // Initialize icon for delete button
-        const deleteBtn = threadEl.querySelector('.delete-thread-btn');
-        if (Icons.trash) {
-            deleteBtn.innerHTML = Icons.trash;
-        }
+        // Initialize ALL icons in the thread element (including nested ones)
+        const initializeThreadIcons = (element) => {
+            const iconsToInit = element.querySelectorAll('[data-icon]');
+            console.log('Initializing icons:', iconsToInit.length);
+            iconsToInit.forEach(el => {
+                const iconName = el.getAttribute('data-icon');
+                console.log('Icon:', iconName, 'Exists:', !!Icons[iconName]);
+                if (Icons[iconName]) {
+                    el.innerHTML = Icons[iconName];
+                }
+            });
+        };
         
+        initializeThreadIcons(threadEl);
+        
+        // Click on thread item
         threadEl.addEventListener('click', (e) => {
-            if (!e.target.closest('.delete-thread-btn')) {
+            if (!e.target.closest('.thread-actions')) {
                 selectThread(thread.thread_id);
             }
         });
         
+        // Menu button
+        const menuBtn = threadEl.querySelector('.thread-menu-btn');
+        const dropdown = threadEl.querySelector('.thread-dropdown');
+        
+        menuBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            toggleThreadDropdown(threadEl, menuBtn, dropdown);
+        });
+        
+        // Rename
+        const renameBtn = threadEl.querySelector('.rename-thread');
+        renameBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            startRenameThread(thread.thread_id, threadEl);
+            closeAllDropdowns();
+        });
+        
+        // Pin/Unpin
+        const pinBtn = threadEl.querySelector('.pin-thread');
+        pinBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            togglePinThread(thread.thread_id);
+            closeAllDropdowns();
+        });
+        
+        // Delete
+        const deleteBtn = threadEl.querySelector('.delete-thread');
         deleteBtn.addEventListener('click', (e) => {
             e.stopPropagation();
             deleteThread(thread.thread_id);
+            closeAllDropdowns();
         });
-        
-        // Add ripple effect to delete button
-        deleteBtn.addEventListener('click', createRipple);
         
         elements.threadsList.appendChild(threadEl);
     });
@@ -284,6 +359,145 @@ async function selectThread(threadId) {
         console.error('Error selecting thread:', error);
         showNotification('Error selecting chat', 'error');
     }
+}
+
+// Toggle Thread Dropdown
+function toggleThreadDropdown(threadEl, menuBtn, dropdown) {
+    const isOpen = dropdown.classList.contains('show');
+    
+    // Close all other dropdowns
+    closeAllDropdowns();
+    
+    if (!isOpen) {
+        dropdown.classList.add('show');
+        menuBtn.classList.add('active');
+    }
+}
+
+// Close All Dropdowns
+function closeAllDropdowns() {
+    document.querySelectorAll('.thread-dropdown.show').forEach(dropdown => {
+        dropdown.classList.remove('show');
+    });
+    document.querySelectorAll('.thread-menu-btn.active').forEach(btn => {
+        btn.classList.remove('active');
+    });
+}
+
+// Start Rename Thread
+function startRenameThread(threadId, threadEl) {
+    const threadInfo = threadEl.querySelector('.thread-info');
+    const threadTitle = threadEl.querySelector('.thread-title');
+    const currentName = threadEl.querySelector('.thread-title-text').textContent;
+    
+    state.editingThreadId = threadId;
+    
+    threadTitle.innerHTML = `
+        <div class="thread-title-edit">
+            <input type="text" class="thread-title-input" value="${currentName}" />
+            <div class="thread-title-actions">
+                <button class="thread-title-btn save" data-icon="check"></button>
+                <button class="thread-title-btn cancel" data-icon="x"></button>
+            </div>
+        </div>
+    `;
+    
+    // Initialize icons
+    threadTitle.querySelectorAll('[data-icon]').forEach(el => {
+        const iconName = el.getAttribute('data-icon');
+        if (Icons[iconName]) {
+            el.innerHTML = Icons[iconName];
+        }
+    });
+    
+    const input = threadTitle.querySelector('.thread-title-input');
+    const saveBtn = threadTitle.querySelector('.save');
+    const cancelBtn = threadTitle.querySelector('.cancel');
+    
+    input.focus();
+    input.select();
+    
+    // Save on Enter
+    input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            saveThreadName(threadId, input.value);
+        } else if (e.key === 'Escape') {
+            cancelRenameThread();
+        }
+    });
+    
+    // Save button
+    saveBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        saveThreadName(threadId, input.value);
+    });
+    
+    // Cancel button
+    cancelBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        cancelRenameThread();
+    });
+}
+
+// Save Thread Name
+async function saveThreadName(threadId, newName) {
+    if (!newName.trim()) {
+        showNotification('Thread name cannot be empty', 'error');
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/threads/${threadId}/name`, {
+            method: 'PUT',
+            credentials: 'include',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ name: newName.trim() })
+        });
+        
+        if (!response.ok) throw new Error('Failed to rename thread');
+        
+        // Update local state
+        const thread = state.threads.find(t => t.thread_id === threadId);
+        if (thread) {
+            thread.name = newName.trim();
+        }
+        
+        state.editingThreadId = null;
+        renderThreads();
+        showNotification('Thread renamed successfully', 'success');
+    } catch (error) {
+        console.error('Error renaming thread:', error);
+        showNotification('Failed to rename thread', 'error');
+        cancelRenameThread();
+    }
+}
+
+// Cancel Rename Thread
+function cancelRenameThread() {
+    state.editingThreadId = null;
+    renderThreads();
+}
+
+// Toggle Pin Thread
+function togglePinThread(threadId) {
+    const index = state.pinnedThreads.indexOf(threadId);
+    
+    if (index > -1) {
+        // Unpin
+        state.pinnedThreads.splice(index, 1);
+        showNotification('Thread unpinned', 'success');
+    } else {
+        // Pin
+        state.pinnedThreads.push(threadId);
+        showNotification('Thread pinned', 'success');
+    }
+    
+    // Save to localStorage
+    localStorage.setItem('pinnedThreads', JSON.stringify(state.pinnedThreads));
+    
+    renderThreads();
 }
 
 // Delete Thread
@@ -710,7 +924,7 @@ async function streamMessage(message) {
         const decoder = new TextDecoder();
         let buffer = '';
         let fullText = '';
-        let sources = [];
+        let accumulatedSources = []; // Accumulate sources from multiple chunks
         
         while (true) {
             const { done, value } = await reader.read();
@@ -737,16 +951,37 @@ async function streamMessage(message) {
                         const data = JSON.parse(dataMatch[1]);
                         
                         console.log('Received chunk:', data);
+                        if (data.tool_response) {
+                            console.log('Tool response details:', JSON.stringify(data.tool_response, null, 2));
+                        }
                         
                         if (data.response_text) {
                             fullText += data.response_text;
-                            updateStreamingMessage(assistantMessageId, fullText, sources);
+                            updateStreamingMessage(assistantMessageId, fullText, accumulatedSources);
                         }
                         
                         if (data.tool_response && data.tool_response.length > 0) {
-                            // Backend already accumulates sources, just use them
-                            sources = data.tool_response;
-                            updateStreamingMessage(assistantMessageId, fullText, sources);
+                            // Accumulate sources from multiple chunks
+                            console.log('Before accumulation:', accumulatedSources.length, 'sources');
+                            console.log('New sources received:', data.tool_response.length);
+                            
+                            data.tool_response.forEach(newSource => {
+                                // Check if source already exists (by source, text, and chunk_index)
+                                const exists = accumulatedSources.some(existing => 
+                                    existing.source === newSource.source && 
+                                    existing.text === newSource.text &&
+                                    existing.chunk_index === newSource.chunk_index
+                                );
+                                if (!exists) {
+                                    accumulatedSources.push(newSource);
+                                    console.log('Added new source:', newSource.source, 'chunk:', newSource.chunk_index);
+                                } else {
+                                    console.log('Skipped duplicate source:', newSource.source, 'chunk:', newSource.chunk_index);
+                                }
+                            });
+                            
+                            console.log('After accumulation:', accumulatedSources.length, 'sources');
+                            updateStreamingMessage(assistantMessageId, fullText, accumulatedSources);
                         }
                     } catch (e) {
                         console.error('Error parsing SSE data:', e, dataMatch[1]);
@@ -755,7 +990,7 @@ async function streamMessage(message) {
             }
         }
         
-        finalizeStreamingMessage(assistantMessageId, fullText, sources);
+        finalizeStreamingMessage(assistantMessageId, fullText, accumulatedSources);
     } catch (error) {
         console.error('Streaming error:', error);
         removeStreamingMessage(assistantMessageId);
@@ -789,7 +1024,8 @@ function updateStreamingMessage(id, content, sources) {
     const msg = messages.find(m => m.id === id);
     if (msg) {
         msg.content = content;
-        msg.sources = sources;
+        // Always use the accumulated sources array
+        msg.sources = sources || [];
         
         // Save streaming state for this thread BEFORE updating UI
         state.streamingStates[threadId] = {

@@ -35,3 +35,7 @@ class ThreadResponse(BaseModel):
 
 class ActiveThreadResponse(BaseModel):
     thread_id: str | None
+
+
+class RenameThreadRequest(BaseModel):
+    name: str

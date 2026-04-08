@@ -178,8 +178,6 @@ class Agent:
         debug: bool = False,
     ) -> AsyncGenerator[AgentResult | dict]:
         try:
-            accumulated_sources = []
-
             async for chunk in self.agent.astream(
                 input={"messages": [{"role": "user", "content": message}]},
                 stream_mode=["messages"],
@@ -206,9 +204,7 @@ class Agent:
                                 if isinstance(token, ToolMessage)
                                 else None
                             )
-                            if tool_response:
-                                accumulated_sources.extend(tool_response)
-                                yield AgentResult(response_text=None, tool_response=accumulated_sources)
+                            yield AgentResult(response_text=None, tool_response=tool_response)
 
         except Exception as err:
             logger.error(f"Error streaming message for thread {thread_id}: {err}")

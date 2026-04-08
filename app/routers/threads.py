@@ -2,7 +2,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Request
 
-from app.models.api import ActiveThreadResponse, ThreadResponse
+from app.models.api import ActiveThreadResponse, RenameThreadRequest, ThreadResponse
 from app.services.database import Database
 
 router = APIRouter(prefix="/threads", tags=["Threads_id"])
@@ -39,13 +39,25 @@ async def activate_thread(thread_id: str, request: Request, db: Annotated[Databa
     return {"message": "Thread activated", "thread_id": thread_id}
 
 
-@router.put("/{thread_id}/{name}")
-async def set_thread_name(thread_id: str, name: str, request: Request, db: Annotated[Database, Depends(get_db)]):
-    await db.set_thread_name(user_id=request.state.user_id, thread_id=thread_id, name=name)
-    return {"message": f"Thread name '{name}' successfully set to thread '{thread_id}'."}
+@router.put("/{thread_id}/name")
+async def set_thread_name(
+    thread_id: str, request_data: RenameThreadRequest, request: Request, db: Annotated[Database, Depends(get_db)]
+):
+    """
+    Rename a thread.
+
+    Args:
+        thread_id: Thread ID to rename
+        request_data: New thread name
+
+    Raises:
+        ThreadNotFoundOrDoestBelongError: If thread not found or doesn't belong to user
+    """
+    await db.set_thread_name(user_id=request.state.user_id, thread_id=thread_id, name=request_data.name)
+    return {"message": "Thread renamed successfully", "thread_id": thread_id, "name": request_data.name}
 
 
-@router.delete("/{thread_id}", response_model=ThreadResponse)
+@router.delete("/{thread_id}", response_model=ActiveThreadResponse)
 async def delete_thread(thread_id: str, request: Request, db: Annotated[Database, Depends(get_db)]):
     """
     Delete user`s thread.
