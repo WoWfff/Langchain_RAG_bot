@@ -13,6 +13,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.types import GraphOutput
 
 from app.models.agent import AgentResult, ToolInput, ToolResponse
+from app.models.exceptions import AgentHistoryError, AgentProcessingError
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -167,7 +168,8 @@ class Agent:
             return AgentResult(response_text=text, tool_response=tool_response)
 
         except Exception as err:
-            raise ValueError("Error while processing user message.") from err
+            logger.error(f"Error processing message for thread {thread_id}: {err}")
+            raise AgentProcessingError("Failed to process message", original_error=err) from err
 
     async def stream_message(
         self,
@@ -209,7 +211,8 @@ class Agent:
                                 yield AgentResult(response_text=None, tool_response=accumulated_sources)
 
         except Exception as err:
-            raise ValueError(f"Error while processing user message: {err}") from err
+            logger.error(f"Error streaming message for thread {thread_id}: {err}")
+            raise AgentProcessingError(f"Failed to stream message: {err}", original_error=err) from err
 
     async def get_thread_history(self, thread_id: str) -> list[dict]:
         try:
@@ -243,6 +246,6 @@ class Agent:
                                 pass
 
             return messages
-        except Exception as err:  # noqa: BLE001
-            logger.error(f"Failed to get thread history: {err}")
-            return []
+        except Exception as err:
+            logger.error(f"Failed to get thread history for {thread_id}: {err}")
+            raise AgentHistoryError(thread_id, original_error=err) from err

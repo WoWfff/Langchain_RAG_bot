@@ -2,11 +2,12 @@ import json
 from collections.abc import AsyncIterable
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, Request
 from fastapi.sse import EventSourceResponse, ServerSentEvent
 
 from app.models.agent import AgentResult
 from app.models.api import ChatRequest
+from app.models.exceptions import InvalidAgentResponseError
 from app.services.agent import Agent
 from app.services.database import Database
 
@@ -34,11 +35,14 @@ async def get_history(
     request: Request,
     agent: Annotated[Agent, Depends(get_agent)],
 ):
-    try:
-        history = await agent.get_thread_history(thread_id=thread_id)
-        return {"messages": history}
-    except Exception as err:
-        raise HTTPException(500, detail=f"Failed to get history: {err}") from err
+    """
+    Get chat history for a specific thread.
+
+    Raises:
+        AgentHistoryError: If failed to retrieve history
+    """
+    history = await agent.get_thread_history(thread_id=thread_id)
+    return {"messages": history}
 
 
 @router.post("/process_message", response_model=AgentResult)
@@ -47,10 +51,17 @@ async def process_message(
     request_data: ChatRequest,
     agent: Annotated[Agent, Depends(get_agent)],
 ):
+    """
+    Process a chat message and return the agent's response.
+
+    Raises:
+        AgentProcessingError: If agent fails to process the message
+        InvalidAgentResponseError: If agent returns invalid response format
+    """
     result = await agent.process_message(message=request_data.message, thread_id=request.state.thread_id)
 
     if not isinstance(result, AgentResult):
-        raise HTTPException(500, detail="Invalid agent response")
+        raise InvalidAgentResponseError("Agent returned invalid response format")
 
     return result
 
@@ -61,17 +72,17 @@ async def stream_message(
     request_data: ChatRequest,
     agent: Annotated[Agent, Depends(get_agent)],
 ) -> AsyncIterable[ServerSentEvent]:
-    try:
-        async for chunk in agent.stream_message(
-            message=request_data.message,
-            thread_id=request.state.thread_id,
-            debug=False,
-        ):
-            if isinstance(chunk, AgentResult):
-                if chunk.response_text or chunk.tool_response:
-                    yield ServerSentEvent(raw_data=json.dumps(chunk.model_dump(), ensure_ascii=False), event="chunk")
-    except Exception as err:  # noqa: BLE001
-        yield ServerSentEvent(
-            raw_data=json.dumps({"error": str(err)}, ensure_ascii=False),
-            event="error",
-        )
+    """
+    Stream chat messages with Server-Sent Events.
+
+    Raises:
+        AgentProcessingError: If agent fails to process the message
+    """
+    async for chunk in agent.stream_message(
+        message=request_data.message,
+        thread_id=request.state.thread_id,
+        debug=False,
+    ):
+        if isinstance(chunk, AgentResult):
+            if chunk.response_text or chunk.tool_response:
+                yield ServerSentEvent(raw_data=json.dumps(chunk.model_dump(), ensure_ascii=False), event="chunk")

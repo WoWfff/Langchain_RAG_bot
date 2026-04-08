@@ -18,6 +18,7 @@ from app.middleware.user_middleware import UserMiddleware
 from app.routers import chat, database, health, threads
 from app.services.agent import Agent
 from app.services.database import Database
+from app.services.exception_handlers import register_exception_handlers
 from app.services.retrieve import ingest_docs_to_chromadb
 from dotenv import load_dotenv
 from fastapi import FastAPI
@@ -115,6 +116,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+register_exception_handlers(app=app)
 app.add_middleware(UserMiddleware)
 
 # Mount static files

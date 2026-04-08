@@ -20,6 +20,16 @@ const state = {
     theme: localStorage.getItem('theme') || 'dark'
 };
 
+// Initialize icons on page load
+function initializeIcons() {
+    document.querySelectorAll('[data-icon]').forEach(element => {
+        const iconName = element.getAttribute('data-icon');
+        if (Icons[iconName]) {
+            element.innerHTML = Icons[iconName];
+        }
+    });
+}
+
 // DOM Elements
 const elements = {
     loadingScreen: document.getElementById('loading-screen'),
@@ -40,11 +50,42 @@ const elements = {
     backToLanding: document.getElementById('back-to-landing')
 };
 
+// Add ripple effect to buttons
+function createRipple(event) {
+    const button = event.currentTarget;
+    const ripple = document.createElement('span');
+    const rect = button.getBoundingClientRect();
+    const size = Math.max(rect.width, rect.height);
+    const x = event.clientX - rect.left - size / 2;
+    const y = event.clientY - rect.top - size / 2;
+    
+    ripple.style.width = ripple.style.height = size + 'px';
+    ripple.style.left = x + 'px';
+    ripple.style.top = y + 'px';
+    ripple.classList.add('ripple');
+    
+    button.appendChild(ripple);
+    
+    setTimeout(() => {
+        ripple.remove();
+    }, 600);
+}
+
+// Add ripple effect to all buttons
+function addRippleEffects() {
+    const buttons = document.querySelectorAll('.icon-btn, .primary-btn, .send-btn, .source-expand-btn');
+    buttons.forEach(button => {
+        button.addEventListener('click', createRipple);
+    });
+}
+
 // Initialize App
 async function init() {
+    initializeIcons();
     await checkServerHealth();
     setupEventListeners();
     applyTheme();
+    addRippleEffects();
 }
 
 // Check Server Health
@@ -54,7 +95,7 @@ async function checkServerHealth() {
 
     while (attempts < maxAttempts) {
         try {
-            elements.loadingStatus.textContent = `Попытка подключения ${attempts + 1}/${maxAttempts}...`;
+            elements.loadingStatus.textContent = `Connection attempt ${attempts + 1}/${maxAttempts}...`;
             
             const response = await fetch(API.healthStatus, {
                 credentials: 'include'
@@ -63,23 +104,23 @@ async function checkServerHealth() {
             if (response.ok) {
                 const data = await response.json();
                 if (data.is_ready) {
-                    elements.loadingStatus.textContent = 'Сервер готов!';
+                    elements.loadingStatus.textContent = 'Server ready!';
                     await new Promise(resolve => setTimeout(resolve, 500));
                     showMainContainer();
                     return;
                 } else {
-                    elements.loadingStatus.textContent = data.status || 'Загрузка...';
+                    elements.loadingStatus.textContent = data.status || 'Loading...';
                 }
             }
         } catch (error) {
-            console.log('Ожидание запуска сервера...');
+            console.log('Waiting for server to start...');
         }
         
         attempts++;
         await new Promise(resolve => setTimeout(resolve, 1000));
     }
     
-    elements.loadingStatus.textContent = 'Не удалось подключиться к серверу';
+    elements.loadingStatus.textContent = 'Failed to connect to server';
     elements.loadingStatus.style.color = 'var(--danger)';
 }
 
@@ -136,7 +177,7 @@ async function loadThreads() {
         renderThreads();
     } catch (error) {
         console.error('Error loading threads:', error);
-        showNotification('Ошибка загрузки чатов', 'error');
+        showNotification('Error loading chats', 'error');
     }
 }
 
@@ -145,7 +186,7 @@ function renderThreads() {
     elements.threadsList.innerHTML = '';
     
     if (state.threads.length === 0) {
-        elements.threadsList.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--text-secondary);">Нет чатов</div>';
+        elements.threadsList.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--text-secondary);">No chats</div>';
         return;
     }
     
@@ -161,7 +202,7 @@ function renderThreads() {
             threadEl.classList.add('active');
         }
         
-        const date = new Date(thread.created_at).toLocaleDateString('ru-RU', {
+        const date = new Date(thread.created_at).toLocaleDateString('en-US', {
             day: 'numeric',
             month: 'short',
             hour: '2-digit',
@@ -170,23 +211,31 @@ function renderThreads() {
         
         threadEl.innerHTML = `
             <div class="thread-info">
-                <div class="thread-title">Чат ${thread.thread_id.slice(0, 8)}</div>
+                <div class="thread-title">Chat ${thread.thread_id.slice(0, 8)}</div>
                 <div class="thread-date">${date}</div>
             </div>
-            <button class="delete-thread-btn" data-thread-id="${thread.thread_id}">🗑️</button>
+            <button class="delete-thread-btn" data-thread-id="${thread.thread_id}" data-icon="trash"></button>
         `;
         
+        // Initialize icon for delete button
+        const deleteBtn = threadEl.querySelector('.delete-thread-btn');
+        if (Icons.trash) {
+            deleteBtn.innerHTML = Icons.trash;
+        }
+        
         threadEl.addEventListener('click', (e) => {
-            if (!e.target.classList.contains('delete-thread-btn')) {
+            if (!e.target.closest('.delete-thread-btn')) {
                 selectThread(thread.thread_id);
             }
         });
         
-        const deleteBtn = threadEl.querySelector('.delete-thread-btn');
         deleteBtn.addEventListener('click', (e) => {
             e.stopPropagation();
             deleteThread(thread.thread_id);
         });
+        
+        // Add ripple effect to delete button
+        deleteBtn.addEventListener('click', createRipple);
         
         elements.threadsList.appendChild(threadEl);
     });
@@ -208,10 +257,10 @@ async function createNewThread() {
         const data = await response.json();
         await loadThreads();
         selectThread(data.thread_id);
-        showNotification('Новый чат создан', 'success');
+        showNotification('New chat created', 'success');
     } catch (error) {
         console.error('Error creating thread:', error);
-        showNotification('Ошибка создания чата', 'error');
+        showNotification('Error creating chat', 'error');
     }
 }
 
@@ -230,16 +279,16 @@ async function selectThread(threadId) {
         await loadMessages(threadId);
         enableInput();
         
-        elements.currentThreadTitle.textContent = `Чат ${threadId.slice(0, 8)}`;
+        elements.currentThreadTitle.textContent = `Chat ${threadId.slice(0, 8)}`;
     } catch (error) {
         console.error('Error selecting thread:', error);
-        showNotification('Ошибка выбора чата', 'error');
+        showNotification('Error selecting chat', 'error');
     }
 }
 
 // Delete Thread
 async function deleteThread(threadId) {
-    if (!confirm('Удалить этот чат?')) return;
+    if (!confirm('Delete this chat?')) return;
     
     try {
         const isActiveThread = state.currentThreadId === threadId;
@@ -289,7 +338,7 @@ async function deleteThread(threadId) {
             
             // Reload threads list
             await loadThreads();
-            showNotification('Чат удален, создан новый', 'success');
+            showNotification('Chat deleted, new one created', 'success');
         } else {
             // Normal deletion for non-last threads
             const response = await fetch(`${API.threads}/${threadId}`, {
@@ -304,7 +353,7 @@ async function deleteThread(threadId) {
             
             // Reload threads list
             await loadThreads();
-            showNotification('Чат удален', 'success');
+            showNotification('Chat deleted', 'success');
         }
     } catch (error) {
         console.error('Error deleting thread:', error);
@@ -370,8 +419,8 @@ function renderMessages() {
     if (messages.length === 0) {
         elements.messagesContainer.innerHTML = `
             <div class="welcome-message">
-                <h2>👋 Начните диалог!</h2>
-                <p>Задайте вопрос и получите ответ с источниками</p>
+                <h2>Start a conversation!</h2>
+                <p>Ask a question and get an answer with sources</p>
             </div>
         `;
         return;
@@ -430,7 +479,7 @@ function createMessageElement(msg) {
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${msg.type}`;
     
-    const avatar = msg.type === 'user' ? '👤' : '🤖';
+    const avatar = msg.type === 'user' ? Icons.user : Icons.bot;
     
     console.log('Creating message element:', { type: msg.type, sourcesCount: msg.sources?.length || 0 });
     
@@ -441,14 +490,14 @@ function createMessageElement(msg) {
             <div class="message-sources">
                 <div class="sources-header" onclick="toggleSources(this)">
                     <span class="sources-toggle">▶</span>
-                    <span>Источники (${msg.sources.length})</span>
+                    <span>Sources (${msg.sources.length})</span>
                 </div>
                 <div class="sources-list">
                     ${msg.sources.map((source, idx) => `
                         <div class="source-item">
                             <div class="source-header" onclick="toggleSourceContent(this)">
-                                <span class="source-title">${source.source || `Источник ${idx + 1}`}</span>
-                                <button class="source-expand-btn">Развернуть</button>
+                            <span class="source-title">${source.source || `Source ${idx + 1}`}</span>
+                            <button class="source-expand-btn">Expand</button>
                             </div>
                             <div class="source-content">
                                 ${escapeHtml(source.text || '')}
@@ -543,7 +592,7 @@ function toggleSourceContent(header) {
     const btn = header.querySelector('.source-expand-btn');
     
     content.classList.toggle('expanded');
-    btn.textContent = content.classList.contains('expanded') ? 'Свернуть' : 'Развернуть';
+    btn.textContent = content.classList.contains('expanded') ? 'Collapse' : 'Expand';
 }
 
 // Send Message
@@ -567,7 +616,7 @@ async function sendMessage() {
         }
     } catch (error) {
         console.error('Error sending message:', error);
-        showNotification('Ошибка отправки сообщения', 'error');
+        showNotification('Error sending message', 'error');
     } finally {
         enableInput();
     }
@@ -843,14 +892,14 @@ function updateMessageSources(messageEl, sources) {
         <div class="message-sources">
             <div class="sources-header" onclick="toggleSources(this)">
                 <span class="sources-toggle">▶</span>
-                <span>Источники (${sources.length})</span>
+                <span>Sources (${sources.length})</span>
             </div>
             <div class="sources-list">
                 ${sources.map((source, idx) => `
                     <div class="source-item">
                         <div class="source-header" onclick="toggleSourceContent(this)">
-                            <span class="source-title">${source.source || `Источник ${idx + 1}`}</span>
-                            <button class="source-expand-btn">Развернуть</button>
+                            <span class="source-title">${source.source || `Source ${idx + 1}`}</span>
+                            <button class="source-expand-btn">Expand</button>
                         </div>
                         <div class="source-content">
                             ${escapeHtml(source.text || '')}
@@ -953,8 +1002,8 @@ function disableInput() {
 function clearMessages() {
     elements.messagesContainer.innerHTML = `
         <div class="welcome-message">
-            <h2>👋 Добро пожаловать!</h2>
-            <p>Создайте новый чат или выберите существующий из истории</p>
+            <h2>Welcome!</h2>
+            <p>Create a new chat or select an existing one from history</p>
         </div>
     `;
 }
@@ -973,12 +1022,17 @@ function toggleTheme() {
 
 // Apply Theme
 function applyTheme() {
+    const themeBtn = document.getElementById('theme-toggle');
     if (state.theme === 'light') {
         document.body.setAttribute('data-theme', 'light');
-        elements.themeIcon.textContent = '☀️';
+        if (themeBtn && Icons.sun) {
+            themeBtn.innerHTML = Icons.sun;
+        }
     } else {
         document.body.removeAttribute('data-theme');
-        elements.themeIcon.textContent = '🌙';
+        if (themeBtn && Icons.moon) {
+            themeBtn.innerHTML = Icons.moon;
+        }
     }
 }
 

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -8,14 +8,15 @@
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script src="/static/js/icons.js"></script>
 </head>
 <body>
     <!-- Loading Screen -->
     <div id="loading-screen" class="loading-screen">
         <div class="loading-content">
             <div class="spinner"></div>
-            <h2>Запуск сервера...</h2>
-            <p id="loading-status">Проверка состояния системы</p>
+            <h2>Starting server...</h2>
+            <p id="loading-status">Checking system status</p>
         </div>
     </div>
 
@@ -24,37 +25,37 @@
         <!-- Landing Page -->
         <div id="landing-page" class="landing-page">
             <header class="landing-header">
-                <h1>🤖 RAG Bot</h1>
-                <p class="subtitle">Интеллектуальный ассистент на базе AI</p>
+                <h1>RAG Bot</h1>
+                <p class="subtitle">AI-Powered Intelligent Assistant</p>
             </header>
 
             <section class="features">
-                <h2>Ключевые возможности</h2>
+                <h2>Key Features</h2>
                 <div class="features-grid">
-                    <div class="feature-card">
-                        <div class="feature-icon">💬</div>
-                        <h3>Умные диалоги</h3>
-                        <p>Контекстно-зависимые ответы с использованием RAG технологии</p>
-                    </div>
-                    <div class="feature-card">
-                        <div class="feature-icon">📚</div>
-                        <h3>Источники знаний</h3>
-                        <p>Прозрачность ответов с указанием источников информации</p>
-                    </div>
-                    <div class="feature-card">
-                        <div class="feature-icon">⚡</div>
-                        <h3>Потоковая передача</h3>
-                        <p>Мгновенные ответы с эффектом печати в реальном времени</p>
-                    </div>
-                    <div class="feature-card">
-                        <div class="feature-icon">💾</div>
-                        <h3>История чатов</h3>
-                        <p>Сохранение и управление всеми вашими диалогами</p>
-                    </div>
+                <div class="feature-card">
+                    <div class="feature-icon" data-icon="message"></div>
+                    <h3>Smart Conversations</h3>
+                    <p>Context-aware responses using RAG technology</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon" data-icon="book"></div>
+                    <h3>Knowledge Sources</h3>
+                    <p>Transparent answers with information source references</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon" data-icon="zap"></div>
+                    <h3>Streaming</h3>
+                    <p>Instant responses with real-time typing effect</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon" data-icon="database"></div>
+                    <h3>Chat History</h3>
+                    <p>Save and manage all your conversations</p>
+                </div>
                 </div>
             </section>
 
-            <button id="start-chat-btn" class="primary-btn">Начать общение</button>
+            <button id="start-chat-btn" class="primary-btn">Start Chatting</button>
         </div>
 
         <!-- Chat Interface -->
@@ -62,20 +63,17 @@
             <!-- Sidebar -->
             <aside class="sidebar">
                 <div class="sidebar-header">
-                    <h2>История чатов</h2>
-                    <button id="new-chat-btn" class="icon-btn" title="Новый чат">
-                        <span>➕</span>
+                    <h2>Chat History</h2>
+                    <button id="new-chat-btn" class="icon-btn" title="New Chat" data-icon="plus">
                     </button>
                 </div>
                 <div id="threads-list" class="threads-list">
                     <!-- Threads will be loaded here -->
                 </div>
                 <div class="sidebar-footer">
-                    <button id="theme-toggle" class="icon-btn" title="Переключить тему">
-                        <span id="theme-icon">🌙</span>
+                    <button id="theme-toggle" class="icon-btn" title="Toggle Theme" data-icon="moon">
                     </button>
-                    <button id="back-to-landing" class="icon-btn" title="На главную">
-                        <span>🏠</span>
+                    <button id="back-to-landing" class="icon-btn" title="Home" data-icon="home">
                     </button>
                 </div>
             </aside>
@@ -83,32 +81,31 @@
             <!-- Chat Area -->
             <main class="chat-main">
                 <div class="chat-header">
-                    <h3 id="current-thread-title">Выберите или создайте чат</h3>
+                    <h3 id="current-thread-title">Select or create a chat</h3>
                     <div class="mode-toggle">
                         <label class="toggle-label">
                             <input type="checkbox" id="streaming-toggle">
                             <span class="toggle-slider"></span>
-                            <span class="toggle-text">Потоковый режим</span>
+                            <span class="toggle-text">Streaming Mode</span>
                         </label>
                     </div>
                 </div>
 
                 <div id="messages-container" class="messages-container">
                     <div class="welcome-message">
-                        <h2>👋 Добро пожаловать!</h2>
-                        <p>Создайте новый чат или выберите существующий из истории</p>
+                        <h2>Welcome!</h2>
+                        <p>Create a new chat or select an existing one from history</p>
                     </div>
                 </div>
 
                 <div class="chat-input-container">
                     <textarea 
                         id="message-input" 
-                        placeholder="Введите ваше сообщение..."
+                        placeholder="Type your message..."
                         rows="1"
                         disabled
                     ></textarea>
-                    <button id="send-btn" class="send-btn" disabled>
-                        <span>📤</span>
+                    <button id="send-btn" class="send-btn" disabled data-icon="send">
                     </button>
                 </div>
             </main>
