@@ -179,7 +179,6 @@ class Database:
             await session.commit()
 
     async def remove_user_thread(self, user_id: int, thread_id: str) -> str | None:
-        active_thread: str | None = thread_id
         thread = await self.get_thread_by_id(thread_id=thread_id)
 
         if not thread or thread.user_id != user_id:
@@ -200,17 +199,24 @@ class Database:
             await session.execute(
                 text("DELETE FROM checkpoints WHERE thread_id = :thread_id"), {"thread_id": thread_id}
             )
+
+            # Get user and check if this is the active thread
             stmt_user = select(User).where(User.id == user_id)
             result = await session.execute(stmt_user)
             user = result.scalar_one_or_none()
 
+            # If this was the active thread, set active_thread_id to None
             if user and user.active_thread_id == thread_id:
                 stmt_update = update(User).where(User.id == user_id).values(active_thread_id=None)
-                active_thread = None
                 await session.execute(stmt_update)
+                active_thread_after_delete = None
+            else:
+                # Keep the current active thread
+                active_thread_after_delete = user.active_thread_id if user else None
 
+            # Delete the thread
             stmt_delete = delete(Thread).where(Thread.thread_id == thread_id)
             await session.execute(stmt_delete)
 
             await session.commit()
-            return active_thread
+            return active_thread_after_delete

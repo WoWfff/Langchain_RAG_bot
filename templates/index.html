@@ -64,8 +64,16 @@
             <aside class="sidebar">
                 <div class="sidebar-header">
                     <h2>Chat History</h2>
-                    <button id="new-chat-btn" class="icon-btn" title="New Chat" data-icon="plus">
-                    </button>
+                    <div class="sidebar-actions">
+                        <button id="select-mode-btn" class="icon-btn" title="Select Multiple" data-icon="multiSelect">
+                        </button>
+                        <button id="cancel-select-btn" class="icon-btn" title="Cancel" data-icon="close" style="display: none;">
+                        </button>
+                        <button id="delete-selected-btn" class="icon-btn danger-btn" title="Delete Selected" data-icon="trash" style="display: none;">
+                        </button>
+                        <button id="new-chat-btn" class="icon-btn" title="New Chat" data-icon="plus">
+                        </button>
+                    </div>
                 </div>
                 <div id="threads-list" class="threads-list">
                     <!-- Threads will be loaded here -->
