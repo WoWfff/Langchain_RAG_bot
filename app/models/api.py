@@ -29,4 +29,9 @@ class DeleteThreadRequest(BaseModel):
 
 class ThreadResponse(BaseModel):
     thread_id: str
+    thread_name: str | None = None
     created_at: datetime
+
+
+class ActiveThreadResponse(BaseModel):
+    thread_id: str | None

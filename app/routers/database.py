@@ -14,13 +14,10 @@ def get_db(request: Request) -> Database:
 
 @router.post("/add_user")
 async def add_user(request: AddUserRequest, db: Annotated[Database, Depends(get_db)]):
-    try:
-        await db.add_user(
-            cookies_id=request.cookies_id,
-        )
-        return {"message": "ONLY FOR DEBUG"}
-    except Exception as err:
-        raise HTTPException(status_code=500, detail=str(err)) from err
+    await db.add_user(
+        cookies_id=request.cookies_id,
+    )
+    return {"message": "ONLY FOR DEBUG"}
 
 
 @router.post("/delete_thread")
