@@ -28,17 +28,15 @@ class UserMiddleware(BaseHTTPMiddleware):
             user = await db.add_user(cookies_id=cookies_id)  # type: ignore
             logger.info(f"Created new user: {user.id}")
 
-        if user.active_thread_id:
-            thread_id = user.active_thread_id
-            logger.info(f"Using active thread: {thread_id}")
-        else:
-            thread = await db.create_and_set_active_thread(user_id=user.id)
-            thread_id = thread.thread_id
-            logger.info(f"Created thread: {thread.thread_id} for user: {user.id}")
-
+        # Set user info in request state
         request.state.user_id = user.id
-        request.state.thread_id = thread_id
+        request.state.thread_id = user.active_thread_id  # Can be None
         request.state.cookies_id = cookies_id  # type: ignore
+
+        if user.active_thread_id:
+            logger.info(f"Using active thread: {user.active_thread_id}")
+        else:
+            logger.info(f"No active thread for user: {user.id}")
 
         response = await call_next(request)
         response.set_cookie(
