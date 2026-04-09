@@ -106,6 +106,8 @@ class Agent:
         return result or []
 
     def extract_tool_response_for_process_message(self, response: list[dict]) -> list[dict]:
+        accumulated_sources = []
+
         for msg in response:
             data = msg.get("data", ())
             tools = data.get("tools", {})
@@ -115,8 +117,9 @@ class Agent:
                 if getattr(message, "status", None) == "success" and getattr(message, "type", None) == "tool":
                     if hasattr(message, "content") and message.content:
                         result = self.extract_tool_data(message=message.content)
-                        return result
-        return []
+                        accumulated_sources.extend(result)
+
+        return accumulated_sources
 
     def extract_ai_response_from_procces_message(self, response: list[dict]) -> str | None:
         for msg in reversed(response):
@@ -214,7 +217,7 @@ class Agent:
         try:
             state = await self.agent.aget_state(config={"configurable": {"thread_id": thread_id}})
             messages = []
-            pending_sources = None
+            pending_sources: list[dict] = []
 
             if state and hasattr(state, "values") and "messages" in state.values:
                 for msg in state.values["messages"]:
@@ -230,14 +233,14 @@ class Agent:
                             new_msg = {"role": "assistant", "content": text}
                             if pending_sources:
                                 new_msg["sources"] = pending_sources
-                                pending_sources = None
+                                pending_sources = []
                             messages.append(new_msg)
 
                     elif msg_type == "tool":
                         if hasattr(msg, "text") and msg.text:
                             try:
                                 tool_data = json.loads(msg.text)
-                                pending_sources = tool_data
+                                pending_sources.extend(tool_data)
                             except json.JSONDecodeError:
                                 pass
 

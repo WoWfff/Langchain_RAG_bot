@@ -1591,5 +1591,73 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
+// Sidebar Resize Functionality
+function initSidebarResize() {
+    const sidebar = document.getElementById('sidebar');
+    const resizer = document.getElementById('sidebar-resizer');
+    
+    if (!sidebar || !resizer) return;
+    
+    let isResizing = false;
+    let startX = 0;
+    let startWidth = 0;
+    
+    resizer.addEventListener('mousedown', (e) => {
+        isResizing = true;
+        startX = e.clientX;
+        startWidth = sidebar.offsetWidth;
+        
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+        
+        e.preventDefault();
+    });
+    
+    document.addEventListener('mousemove', (e) => {
+        if (!isResizing) return;
+        
+        const deltaX = e.clientX - startX;
+        const newWidth = startWidth + deltaX;
+        
+        // Apply min/max constraints
+        const minWidth = 250;
+        const maxWidth = 600;
+        const constrainedWidth = Math.max(minWidth, Math.min(maxWidth, newWidth));
+        
+        sidebar.style.width = constrainedWidth + 'px';
+        
+        // Update grid template
+        const chatInterface = document.querySelector('.chat-interface');
+        if (chatInterface) {
+            chatInterface.style.gridTemplateColumns = `${constrainedWidth}px auto 1fr`;
+        }
+    });
+    
+    document.addEventListener('mouseup', () => {
+        if (isResizing) {
+            isResizing = false;
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+            
+            // Save width to localStorage
+            localStorage.setItem('sidebarWidth', sidebar.offsetWidth);
+        }
+    });
+    
+    // Restore saved width or use default
+    const savedWidth = localStorage.getItem('sidebarWidth');
+    const defaultWidth = 322;
+    const width = savedWidth ? parseInt(savedWidth) : defaultWidth;
+    
+    sidebar.style.width = width + 'px';
+    const chatInterface = document.querySelector('.chat-interface');
+    if (chatInterface) {
+        chatInterface.style.gridTemplateColumns = `${width}px auto 1fr`;
+    }
+}
+
 // Start the app
-document.addEventListener('DOMContentLoaded', init);
+document.addEventListener('DOMContentLoaded', () => {
+    init();
+    initSidebarResize();
+});
