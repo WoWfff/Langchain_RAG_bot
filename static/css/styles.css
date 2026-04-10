@@ -226,8 +226,9 @@ body {
 /* Chat Interface */
 .chat-interface {
     display: grid;
-    grid-template-columns: 300px 1fr;
+    grid-template-columns: 322px auto 1fr;
     height: 100vh;
+    gap: 0;
 }
 
 /* Sidebar */
@@ -237,6 +238,37 @@ body {
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    min-width: 250px;
+    max-width: 600px;
+    width: 322px;
+}
+
+/* Sidebar Resizer */
+.sidebar-resizer {
+    width: 4px;
+    background: var(--border);
+    cursor: col-resize;
+    position: relative;
+    transition: background 0.2s;
+    user-select: none;
+    flex-shrink: 0;
+}
+
+.sidebar-resizer:hover {
+    background: var(--accent);
+}
+
+.sidebar-resizer:active {
+    background: var(--accent);
+}
+
+.sidebar-resizer::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -4px;
+    right: -4px;
+    bottom: 0;
 }
 
 .sidebar-header {
@@ -247,6 +279,8 @@ body {
     align-items: center;
     background: var(--bg-secondary);
     position: relative;
+    min-height: 81px;
+    gap: 15px;
 }
 
 .sidebar-header::after {
@@ -262,8 +296,9 @@ body {
 
 .sidebar-actions {
     display: flex;
-    gap: 8px;
+    gap: 12px;
     align-items: center;
+    margin-left: auto;
 }
 
 .danger-btn {
@@ -276,12 +311,10 @@ body {
 }
 
 .sidebar-header h2 {
-    font-size: 1.1rem;
-    background: linear-gradient(135deg, var(--text-primary), var(--accent));
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-    font-weight: 700;
+    font-size: 1.2rem;
+    color: var(--text-primary);
+    font-weight: 600;
+    letter-spacing: 0.5px;
 }
 
 .icon-btn {
@@ -768,11 +801,12 @@ body {
 }
 
 .sidebar-footer {
-    padding: 15px;
+    padding: 20px;
     border-top: 1px solid var(--border);
     display: flex;
     gap: 10px;
     align-items: center;
+    min-height: 90px;
 }
 
 .sidebar-footer a {
@@ -785,6 +819,7 @@ body {
     flex-direction: column;
     height: 100vh;
     background: var(--bg-primary);
+    margin-left: 0;
 }
 
 .chat-header {
@@ -811,10 +846,8 @@ body {
 
 .chat-header h3 {
     font-weight: 600;
-    background: linear-gradient(135deg, var(--text-primary), var(--accent));
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
+    color: var(--text-primary);
+    font-size: 1rem;
 }
 
 .mode-toggle {

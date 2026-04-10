@@ -81,7 +81,7 @@
         <!-- Chat Interface -->
         <div id="chat-interface" class="chat-interface hidden">
             <!-- Sidebar -->
-            <aside class="sidebar">
+            <aside class="sidebar" id="sidebar">
                 <div class="sidebar-header">
                     <h2>Chat History</h2>
                     <div class="sidebar-actions">
@@ -163,11 +163,12 @@
                     </a>
                 </div>
             </aside>
+            <div class="sidebar-resizer" id="sidebar-resizer"></div>
 
             <!-- Chat Area -->
             <main class="chat-main">
                 <div class="chat-header">
-                    <h3 id="current-thread-title">Select or create a chat</h3>
+                    <h3 id="current-thread-title"></h3>
                     <div class="mode-toggle">
                         <label class="streaming-switch">
                             <input type="checkbox" id="streaming-toggle" checked>
