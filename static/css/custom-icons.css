@@ -20,7 +20,7 @@
     background: var(--accent);
     border-color: var(--accent);
     transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(74, 158, 255, 0.3);
+    box-shadow: 0 4px 12px rgba(80, 80, 80, 0.4);
 }
 
 .select-all-container input {
@@ -47,7 +47,7 @@
 }
 
 .select-all-container:hover .path {
-    stroke: white;
+    stroke: #1a1a1a;
 }
 
 .select-all-container input:checked ~ svg {
@@ -57,7 +57,7 @@
 .select-all-container input:checked ~ svg .path {
     stroke-dasharray: 70.5096664428711 9999999;
     stroke-dashoffset: -262.2723388671875;
-    stroke: var(--accent);
+    stroke: #d0d0d0;
 }
 
 .select-all-container:hover input:checked ~ svg {
@@ -65,7 +65,7 @@
 }
 
 .select-all-container:hover input:checked ~ svg .path {
-    stroke: white;
+    stroke: #1a1a1a;
 }
 
 /* Hamburger Selection Mode Toggle */
@@ -87,7 +87,7 @@
     background: var(--accent);
     border-color: var(--accent);
     transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(74, 158, 255, 0.3);
+    box-shadow: 0 4px 12px rgba(80, 80, 80, 0.4);
 }
 
 .hamburger input {
@@ -111,7 +111,7 @@
 }
 
 .hamburger:hover .line {
-    stroke: white;
+    stroke: #1a1a1a;
 }
 
 .hamburger .line-top-bottom {
@@ -123,11 +123,11 @@
 }
 
 .hamburger input:checked + svg .line {
-    stroke: var(--accent);
+    stroke: #d0d0d0;
 }
 
 .hamburger:hover input:checked + svg .line {
-    stroke: white;
+    stroke: #1a1a1a;
 }
 
 .hamburger input:checked + svg .line-top-bottom {
@@ -209,21 +209,21 @@
     background-color: var(--accent);
     border-color: var(--accent);
     transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(74, 158, 255, 0.3);
+    box-shadow: 0 4px 12px rgba(80, 80, 80, 0.4);
 }
 
 .new-chat-button:hover .plus-icon {
-    stroke: white;
+    stroke: #1a1a1a;
     transform: rotate(90deg);
 }
 
 .new-chat-button:active {
     transform: translateY(0) scale(0.95);
-    box-shadow: 0 2px 6px rgba(74, 158, 255, 0.2);
+    box-shadow: 0 2px 6px rgba(80, 80, 80, 0.3);
 }
 
 .new-chat-button:active .plus-icon {
-    stroke: white;
+    stroke: #1a1a1a;
     transform: rotate(90deg);
 }
 
@@ -505,11 +505,11 @@
 }
 
 .streaming-switch:hover .streaming-slider {
-    box-shadow: 0 0 10px rgba(74, 158, 255, 0.4);
+    box-shadow: 0 0 10px rgba(80, 80, 80, 0.4);
 }
 
 .streaming-switch input:checked:hover + .streaming-slider {
-    box-shadow: 0 0 15px rgba(74, 158, 255, 0.6);
+    box-shadow: 0 0 15px rgba(80, 80, 80, 0.5);
 }
 
 .toggle-text {
@@ -536,18 +536,18 @@
 .send-btn {
     font-family: inherit;
     font-size: 16px;
-    background: var(--accent);
-    color: white;
+    background: #3a3a3a;
+    color: #d0d0d0;
     padding: 0.7em 1.5em;
     padding-left: 1em;
     display: flex;
     align-items: center;
-    border: none;
+    border: 1px solid #4a4a4a;
     border-radius: 16px;
     overflow: hidden;
     transition: all 0.2s;
     cursor: pointer;
-    box-shadow: 0 2px 8px rgba(74, 158, 255, 0.3);
+    box-shadow: 0 2px 8px rgba(58, 58, 58, 0.4);
     min-width: 100px;
     height: 50px;
 }

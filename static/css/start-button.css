@@ -73,7 +73,7 @@
 
 .learn-more:hover .circle {
     width: 100%;
-    background: linear-gradient(135deg, var(--accent), #6a5acd);
+    background: var(--accent);
     box-shadow: 0 4px 15px rgba(74, 158, 255, 0.4);
 }
 
