@@ -1,27 +1,27 @@
 :root {
-    --bg-primary: #0a0a0a;
+    --bg-primary: #0f0f0f;
     --bg-secondary: #1a1a1a;
     --bg-tertiary: #2a2a2a;
-    --text-primary: #e8e8e8;
-    --text-secondary: #9a9a9a;
-    --accent: #d0d0d0;
-    --accent-hover: #b0b0b0;
-    --border: #3a3a3a;
-    --success: #c0c0c0;
-    --danger: #6a6a6a;
-    --warning: #8a8a8a;
-    --shadow: rgba(0, 0, 0, 0.5);
+    --text-primary: #e0e0e0;
+    --text-secondary: #a0a0a0;
+    --accent: #4a9eff;
+    --accent-hover: #3a8eef;
+    --border: #333;
+    --success: #4caf50;
+    --danger: #f44336;
+    --warning: #ff9800;
+    --shadow: rgba(0, 0, 0, 0.3);
     --transition: all 0.3s ease;
 }
 
 [data-theme="light"] {
     --bg-primary: #ffffff;
     --bg-secondary: #f5f5f5;
-    --bg-tertiary: #e5e5e5;
-    --text-primary: #0a0a0a;
-    --text-secondary: #5a5a5a;
-    --border: #d0d0d0;
-    --shadow: rgba(0, 0, 0, 0.15);
+    --bg-tertiary: #e0e0e0;
+    --text-primary: #1a1a1a;
+    --text-secondary: #666666;
+    --border: #ddd;
+    --shadow: rgba(0, 0, 0, 0.1);
 }
 
 * {
@@ -91,7 +91,12 @@ body {
 .landing-header h1 {
     font-size: 3.5rem;
     margin-bottom: 10px;
-    color: #d0d0d0;
+    background: var(--accent);
+    background-size: 200% auto;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    animation: gradientShift 3s ease infinite;
 }
 
 @keyframes gradientShift {
@@ -138,7 +143,7 @@ body {
     left: 0;
     width: 100%;
     height: 100%;
-    background: #3a3a3a;
+    background: var(--accent);
     opacity: 0;
     transition: opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1);
     z-index: 0;
@@ -166,11 +171,11 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    background: #3a3a3a;
+    background: var(--accent);
     border-radius: 16px;
-    color: #d0d0d0;
+    color: white;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    box-shadow: 0 4px 15px rgba(58, 58, 58, 0.3);
+    box-shadow: 0 4px 15px rgba(74, 158, 255, 0.3);
 }
 
 .feature-icon svg {
@@ -180,7 +185,7 @@ body {
 
 .feature-card:hover .feature-icon {
     transform: translateY(-4px);
-    box-shadow: 0 8px 25px rgba(80, 80, 80, 0.5);
+    box-shadow: 0 8px 25px rgba(74, 158, 255, 0.5);
 }
 
 .feature-card h3 {
@@ -194,9 +199,9 @@ body {
 }
 
 .primary-btn {
-    background: #3a3a3a;
-    color: #d0d0d0;
-    border: 1px solid #4a4a4a;
+    background: var(--accent);
+    color: white;
+    border: none;
     padding: 15px 40px;
     font-size: 1.1rem;
     border-radius: 12px;
@@ -205,18 +210,17 @@ body {
     font-weight: 600;
     position: relative;
     overflow: hidden;
-    box-shadow: 0 4px 15px rgba(58, 58, 58, 0.3);
+    box-shadow: 0 4px 15px rgba(74, 158, 255, 0.3);
 }
 
 .primary-btn:hover {
     transform: translateY(-3px);
-    background: #4a4a4a;
-    box-shadow: 0 6px 20px rgba(74, 74, 74, 0.4);
+    box-shadow: 0 6px 20px rgba(74, 158, 255, 0.4);
 }
 
 .primary-btn:active {
     transform: translateY(-1px);
-    box-shadow: 0 3px 10px rgba(58, 58, 58, 0.3);
+    box-shadow: 0 3px 10px rgba(74, 158, 255, 0.3);
 }
 
 /* Chat Interface */
@@ -360,9 +364,9 @@ body {
 .icon-btn:hover {
     background: var(--accent);
     border-color: var(--accent);
-    color: #0a0a0a;
+    color: white;
     transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(80, 80, 80, 0.4);
+    box-shadow: 0 4px 12px rgba(74, 158, 255, 0.3);
 }
 
 .icon-btn:hover::before {
@@ -372,7 +376,7 @@ body {
 
 .icon-btn:active {
     transform: translateY(0);
-    box-shadow: 0 2px 6px rgba(80, 80, 80, 0.3);
+    box-shadow: 0 2px 6px rgba(74, 158, 255, 0.2);
 }
 
 .threads-list {
@@ -399,7 +403,7 @@ body {
 }
 
 .thread-item.selected {
-    background: rgba(208, 208, 208, 0.1);
+    background: rgba(74, 158, 255, 0.2);
     border-color: var(--accent);
 }
 
@@ -443,20 +447,20 @@ body {
 }
 
 .thread-item.active:hover {
-    background: #4a4a4a;
+    background: var(--accent);
     transform: translateX(2px);
 }
 
 .thread-item.active.pinned:hover {
-    background: #5a5a5a;
+    background: linear-gradient(135deg, #ff7b7b, #fe6a7f, #d45579);
     transform: translateX(2px);
 }
 
 .thread-item.active {
-    background: #3a3a3a;
-    color: #d0d0d0;
+    background: var(--accent);
+    color: white;
     border-color: var(--accent);
-    box-shadow: 0 2px 8px rgba(58, 58, 58, 0.4);
+    box-shadow: 0 2px 8px rgba(74, 158, 255, 0.3);
     animation: selectThread 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
@@ -475,13 +479,13 @@ body {
 }
 
 .thread-item.active.pinned {
-    background: #4a4a4a;
-    border-color: #6a6a6a;
-    box-shadow: 0 2px 8px rgba(74, 74, 74, 0.4), 0 0 20px rgba(74, 74, 74, 0.2);
+    background: linear-gradient(135deg, #ff6b6b, #ee5a6f, #c44569);
+    border-color: #ff6b6b;
+    box-shadow: 0 2px 8px rgba(255, 107, 107, 0.4), 0 0 20px rgba(255, 107, 107, 0.2);
 }
 
 .thread-item.active.pinned .pin-indicator {
-    color: rgba(208, 208, 208, 0.9);
+    color: rgba(255, 255, 255, 0.9);
     animation: pinPulse 2s ease-in-out infinite;
 }
 
@@ -497,16 +501,16 @@ body {
 }
 
 .thread-item.active .thread-title-text {
-    color: #d0d0d0;
+    color: white;
 }
 
 .thread-item.active .thread-menu-btn {
-    color: rgba(208, 208, 208, 0.8);
+    color: rgba(255, 255, 255, 0.8);
 }
 
 .thread-item.active .thread-menu-btn:hover {
-    color: #d0d0d0;
-    background: rgba(208, 208, 208, 0.15);
+    color: white;
+    background: rgba(255, 255, 255, 0.2);
 }
 
 .thread-info {
@@ -537,12 +541,12 @@ body {
 }
 
 .thread-item.active:hover .thread-title-text {
-    color: #d0d0d0;
+    color: white;
 }
 
 .thread-item.pinned {
     border-color: var(--accent);
-    background: rgba(58, 58, 58, 0.5);
+    background: rgba(74, 158, 255, 0.1);
 }
 
 .thread-actions {
@@ -590,7 +594,7 @@ body {
 
 .thread-menu-btn.active {
     background: var(--accent);
-    color: #1a1a1a;
+    color: white;
 }
 
 .thread-dropdown {
@@ -682,11 +686,11 @@ body {
     font-family: inherit;
     font-weight: 600;
     outline: none;
-    box-shadow: 0 0 0 3px rgba(80, 80, 80, 0.2);
+    box-shadow: 0 0 0 3px rgba(74, 158, 255, 0.1);
 }
 
 .thread-title-input:focus {
-    box-shadow: 0 0 0 3px rgba(80, 80, 80, 0.3);
+    box-shadow: 0 0 0 3px rgba(74, 158, 255, 0.2);
 }
 
 .thread-title-actions {
@@ -760,7 +764,7 @@ body {
 }
 
 .thread-item.active .thread-date {
-    color: rgba(154, 154, 154, 0.8);
+    color: rgba(255, 255, 255, 0.7);
 }
 
 .delete-thread-btn {
@@ -886,8 +890,8 @@ body {
 }
 
 .toggle-label input:checked + .toggle-slider {
-    background: #4a4a4a;
-    box-shadow: 0 2px 8px rgba(74, 74, 74, 0.4);
+    background: var(--accent);
+    box-shadow: 0 2px 8px rgba(74, 158, 255, 0.3);
 }
 
 .toggle-label input:checked + .toggle-slider::before {
@@ -895,7 +899,7 @@ body {
 }
 
 .toggle-label:hover .toggle-slider {
-    box-shadow: 0 0 0 4px rgba(80, 80, 80, 0.2);
+    box-shadow: 0 0 0 4px rgba(74, 158, 255, 0.1);
 }
 
 .toggle-text {
@@ -937,7 +941,10 @@ body {
 .welcome-message h2 {
     margin-bottom: 20px;
     font-size: 2.5rem;
-    color: #d0d0d0;
+    background: var(--accent);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
     font-weight: 700;
 }
 
@@ -949,11 +956,11 @@ body {
 @keyframes fadeInScale {
     from {
         opacity: 0;
-        transform: scale(0.9);
+        transform: translate(-50%, -50%) scale(0.95);
     }
     to {
         opacity: 1;
-        transform: scale(1);
+        transform: translate(-50%, -50%) scale(1);
     }
 }
 
@@ -1045,15 +1052,15 @@ body {
 }
 
 .message.user .message-avatar {
-    background: #3a3a3a;
-    color: #d0d0d0;
-    box-shadow: 0 2px 8px rgba(58, 58, 58, 0.4);
+    background: var(--accent);
+    color: white;
+    box-shadow: 0 2px 8px rgba(74, 158, 255, 0.3);
 }
 
 .message.assistant .message-avatar {
-    background: #4a4a4a;
-    color: #d0d0d0;
-    box-shadow: 0 2px 8px rgba(74, 74, 74, 0.4);
+    background: var(--success);
+    color: white;
+    box-shadow: 0 2px 8px rgba(76, 175, 80, 0.3);
 }
 
 
@@ -1073,13 +1080,13 @@ body {
 }
 
 .message.user .message-content {
-    background: #3a3a3a;
-    color: #d0d0d0;
-    box-shadow: 0 2px 8px rgba(58, 58, 58, 0.4);
+    background: var(--accent);
+    color: white;
+    box-shadow: 0 2px 8px rgba(74, 158, 255, 0.3);
 }
 
 .message.user .message-content:hover {
-    box-shadow: 0 4px 12px rgba(74, 74, 74, 0.5);
+    box-shadow: 0 4px 12px rgba(74, 158, 255, 0.4);
 }
 
 .message-text {
@@ -1166,7 +1173,7 @@ body {
 }
 
 .message.user .message-text a {
-    color: rgba(208, 208, 208, 0.9);
+    color: rgba(255, 255, 255, 0.9);
 }
 
 .message-text table {
@@ -1367,7 +1374,7 @@ body {
 #message-input:focus {
     outline: none;
     border-color: var(--accent);
-    box-shadow: 0 0 0 3px rgba(80, 80, 80, 0.2);
+    box-shadow: 0 0 0 3px rgba(74, 158, 255, 0.1);
     transform: translateY(-1px);
 }
 
@@ -1377,9 +1384,9 @@ body {
 }
 
 .send-btn {
-    background: #3a3a3a;
-    border: 1px solid #4a4a4a;
-    color: #d0d0d0;
+    background: var(--accent);
+    border: none;
+    color: white;
     width: 50px;
     height: 50px;
     border-radius: 12px;
@@ -1390,7 +1397,7 @@ body {
     justify-content: center;
     position: relative;
     overflow: hidden;
-    box-shadow: 0 2px 8px rgba(58, 58, 58, 0.4);
+    box-shadow: 0 2px 8px rgba(74, 158, 255, 0.3);
 }
 
 .send-btn svg,
@@ -1417,8 +1424,7 @@ body {
 
 .send-btn:hover:not(:disabled) {
     transform: translateY(-3px);
-    background: #4a4a4a;
-    box-shadow: 0 6px 20px rgba(74, 74, 74, 0.5);
+    box-shadow: 0 6px 20px rgba(74, 158, 255, 0.5);
 }
 
 .send-btn:hover:not(:disabled)::before {
@@ -1433,7 +1439,7 @@ body {
 
 .send-btn:active:not(:disabled) {
     transform: translateY(0) rotate(0deg);
-    box-shadow: 0 2px 8px rgba(58, 58, 58, 0.4);
+    box-shadow: 0 2px 8px rgba(74, 158, 255, 0.3);
 }
 
 .send-btn:disabled {
@@ -1478,8 +1484,8 @@ body {
 }
 
 ::-webkit-scrollbar-thumb:hover {
-    background: #5a5a5a;
-    box-shadow: 0 0 10px rgba(90, 90, 90, 0.4);
+    background: var(--accent);
+    box-shadow: 0 0 10px rgba(74, 158, 255, 0.3);
 }
 
 ::-webkit-scrollbar-thumb:active {
