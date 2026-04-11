@@ -595,20 +595,30 @@ async function deleteSelectedThreads() {
         return;
     }
     
-    if (!confirm(`Delete ${state.selectedThreads.length} selected chat(s)?`)) {
+    const deleteCount = state.selectedThreads.length;
+    
+    if (!confirm(`Delete ${deleteCount} selected chat(s)?`)) {
         return;
     }
     
     try {
+        console.log('Deleting threads:', state.selectedThreads);
+        console.log('Delete count:', deleteCount);
+        
         // Delete all selected threads
-        const deletePromises = state.selectedThreads.map(threadId => 
-            fetch(`${API.threads}/${threadId}`, {
+        const deletePromises = state.selectedThreads.map(async threadId => {
+            const response = await fetch(`${API.threads}/${threadId}`, {
                 method: 'DELETE',
                 credentials: 'include'
-            })
-        );
+            });
+            if (!response.ok) {
+                console.error(`Failed to delete thread ${threadId}:`, response.status);
+            }
+            return response;
+        });
         
-        await Promise.all(deletePromises);
+        const results = await Promise.all(deletePromises);
+        console.log('Delete results:', results.map(r => r.status));
         
         // If current thread was deleted, clear it
         if (state.selectedThreads.includes(state.currentThreadId)) {
@@ -620,7 +630,8 @@ async function deleteSelectedThreads() {
         exitSelectionMode();
         await loadThreads();
         
-        showNotification(`${state.selectedThreads.length} chat(s) deleted`, 'success');
+        console.log('Showing notification with count:', deleteCount);
+        showNotification(`${deleteCount} chat(s) deleted`, 'success');
     } catch (error) {
         console.error('Error deleting threads:', error);
         showNotification('Error deleting chats', 'error');
@@ -811,7 +822,14 @@ function createMessageElement(msg) {
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${msg.type}`;
     
-    const avatar = msg.type === 'user' ? Icons.user : Icons.bot;
+    let avatar;
+    if (msg.type === 'user') {
+        avatar = Icons.user;
+    } else if (msg.type === 'error') {
+        avatar = Icons.alertCircle || Icons.bot;
+    } else {
+        avatar = Icons.bot;
+    }
     
     console.log('Creating message element:', { type: msg.type, sourcesCount: msg.sources?.length || 0 });
     
@@ -1146,8 +1164,25 @@ async function streamMessage(message) {
                 if (dataMatch) {
                     try {
                         const data = JSON.parse(dataMatch[1]);
+                        const eventType = eventMatch ? eventMatch[1] : 'chunk';
                         
-                        console.log('Received chunk:', data);
+                        console.log('Received event:', eventType, data);
+                        
+                        // Handle error events
+                        if (eventType === 'error' || data.type === 'RateLimitError') {
+                            removeStreamingMessage(assistantMessageId);
+                            
+                            let errorMessage = data.error || 'An error occurred';
+                            if (data.retry_after) {
+                                errorMessage += ` Please wait ${data.retry_after} seconds before trying again.`;
+                            }
+                            
+                            // Add error as assistant message
+                            addErrorMessage(errorMessage);
+                            enableInput();
+                            return; // Stop processing
+                        }
+                        
                         if (data.tool_response) {
                             console.log('Tool response details:', JSON.stringify(data.tool_response, null, 2));
                         }
@@ -1473,6 +1508,24 @@ function addAssistantMessage(data) {
     scrollToBottom();
 }
 
+// Add Error Message
+function addErrorMessage(errorText) {
+    const messages = state.messages[state.currentThreadId] || [];
+    const msg = {
+        type: 'error',
+        content: errorText,
+        sources: []
+    };
+    messages.push(msg);
+    state.messages[state.currentThreadId] = messages;
+    
+    // Append the error message without re-rendering
+    const messageEl = createMessageElement(msg);
+    messageEl.classList.add('fade-in');
+    elements.messagesContainer.appendChild(messageEl);
+    scrollToBottom();
+}
+
 // Handle Input Keydown
 function handleInputKeydown(e) {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -1582,6 +1635,37 @@ function applyTheme() {
 // Show Notification
 function showNotification(message, type = 'info') {
     console.log(`[${type.toUpperCase()}] ${message}`);
+    
+    // Remove any existing notifications
+    const existingNotifications = document.querySelectorAll('.notification');
+    existingNotifications.forEach(notif => {
+        notif.classList.remove('show');
+        setTimeout(() => {
+            notif.remove();
+        }, 300);
+    });
+    
+    // Create notification element
+    const notification = document.createElement('div');
+    notification.className = `notification notification-${type}`;
+    notification.textContent = message;
+    
+    // Add to body
+    document.body.appendChild(notification);
+    
+    // Trigger animation
+    setTimeout(() => {
+        notification.classList.add('show');
+    }, 10);
+    
+    // Remove after 2 seconds (longer for errors)
+    const duration = type === 'error' ? 5000 : 2000;
+    setTimeout(() => {
+        notification.classList.remove('show');
+        setTimeout(() => {
+            notification.remove();
+        }, 300);
+    }, duration);
 }
 
 // Escape HTML

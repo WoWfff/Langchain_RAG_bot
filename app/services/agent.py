@@ -13,7 +13,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.types import GraphOutput
 
 from app.models.agent import AgentResult, ToolInput, ToolResponse
-from app.models.exceptions import AgentHistoryError, AgentProcessingError
+from app.models.exceptions import AgentHistoryError, AgentProcessingError, RateLimitError
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -45,7 +45,7 @@ class Agent:
                 temperature=1.0,
                 max_tokens=None,
                 timeout=120,
-                max_retries=3,
+                max_retries=0,  # Disable automatic retries to handle rate limits manually
             )
 
             self.retriever = self.db.as_retriever(search_kwargs={"k": 5})
@@ -171,6 +171,17 @@ class Agent:
             return AgentResult(response_text=text, tool_response=tool_response)
 
         except Exception as err:
+            # Check if it's a rate limit error
+            error_str = str(err)
+            if "429" in error_str or "RESOURCE_EXHAUSTED" in error_str or "quota" in error_str.lower():
+                # Try to extract retry delay from error message
+                import re
+
+                retry_match = re.search(r"retry.*?(\d+)(?:\.\d+)?s", error_str, re.IGNORECASE)
+                retry_after = int(float(retry_match.group(1))) if retry_match else None
+                logger.warning(f"Rate limit exceeded for thread {thread_id}. Retry after: {retry_after}s")
+                raise RateLimitError(retry_after=retry_after) from err
+
             logger.error(f"Error processing message for thread {thread_id}: {err}")
             raise AgentProcessingError("Failed to process message", original_error=err) from err
 
@@ -210,6 +221,17 @@ class Agent:
                             yield AgentResult(response_text=None, tool_response=tool_response)
 
         except Exception as err:
+            # Check if it's a rate limit error
+            error_str = str(err)
+            if "429" in error_str or "RESOURCE_EXHAUSTED" in error_str or "quota" in error_str.lower():
+                # Try to extract retry delay from error message
+                import re
+
+                retry_match = re.search(r"retry.*?(\d+)(?:\.\d+)?s", error_str, re.IGNORECASE)
+                retry_after = int(float(retry_match.group(1))) if retry_match else None
+                logger.warning(f"Rate limit exceeded for thread {thread_id}. Retry after: {retry_after}s")
+                raise RateLimitError(retry_after=retry_after) from err
+
             logger.error(f"Error streaming message for thread {thread_id}: {err}")
             raise AgentProcessingError(f"Failed to stream message: {err}", original_error=err) from err
 

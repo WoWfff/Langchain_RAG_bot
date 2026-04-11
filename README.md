@@ -309,6 +309,15 @@ The API uses cookie-based session management. Users are automatically created on
 }
 ```
 
+### StreamError (SSE only)
+```json
+{
+  "error": "Rate limit exceeded. Please retry after 52 seconds.",
+  "type": "RateLimitError",
+  "retry_after": 52
+}
+```
+
 ## Process message Endpoint
 `POST /chat/process_message` returns Server-Sent Events:
 
@@ -324,12 +333,28 @@ data: {"response_text": "model response", "tool_response": [...]}
 
 `POST /chat/stream_message` returns Server-Sent Events:
 
+**Success events:**
 ```
 event: chunk
 data: {"response_text": "partial text", "tool_response": null}
 
 event: chunk
 data: {"response_text": null, "tool_response": [...]}
+```
+
+**Error events:**
+```
+event: error
+data: {"error": "Error message", "type": "RateLimitError", "retry_after": 52}
+```
+
+### StreamError Format
+```json
+{
+  "error": "Rate limit exceeded. Please retry after 52 seconds.",
+  "type": "RateLimitError",
+  "retry_after": 52
+}
 ```
 
 ---
@@ -360,9 +385,11 @@ app/
 Custom exceptions:
 - `AgentProcessingError` - Agent execution failures
 - `AgentHistoryError` - Thread history retrieval errors
+- `RateLimitError` - API rate limit exceeded (429)
 - `ThreadNotFoundError` - Thread doesn't exist
 - `ThreadNotFoundOrDoestBelongError` - Thread access denied
 - `UserWithCookiesExists` - Duplicate session
+- `InvalidAgentResponseError` - Invalid response format from agent
 
 ---
 
@@ -444,6 +471,31 @@ Custom exceptions:
 - Ensure all models are downloaded (first run takes longer)
 - Verify ChromaDB collection exists and has documents
 - Check LangGraph checkpointer tables are created in PostgreSQL
+
+## Rate Limit Errors (429)
+
+**Problem**: `429 Too Many Requests` or `RESOURCE_EXHAUSTED` from Gemini API
+
+**Solutions**:
+- **Free tier limits**: Gemini free tier has strict rate limits (e.g., 20 requests/day for some models)
+- **Wait and retry**: The API will automatically retry with exponential backoff
+- **Check quota**: Monitor usage at https://ai.dev/rate-limit
+- **Upgrade plan**: Consider upgrading to paid tier for higher limits
+- **Switch model**: Try a different model with higher quota (check `app/config.py`)
+- **Response format**: API returns `Retry-After` header with seconds to wait
+- The application automatically catches these errors and returns HTTP 429 with retry information
+
+**For streaming endpoints**: Rate limit errors are sent as SSE error events:
+```javascript
+// Frontend handling example
+eventSource.addEventListener('error', (event) => {
+  const error = JSON.parse(event.data);
+  if (error.type === 'RateLimitError') {
+    console.log(`Rate limited. Retry after ${error.retry_after} seconds`);
+    // Show user-friendly message with countdown
+  }
+});
+```
 
 ---
 

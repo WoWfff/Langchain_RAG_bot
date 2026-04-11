@@ -31,3 +31,9 @@ class ToolResponse(BaseModel):
 class AgentResult(BaseModel):
     response_text: str | None
     tool_response: list[dict] | None
+
+
+class StreamError(BaseModel):
+    error: str
+    type: str
+    retry_after: int | None = None
