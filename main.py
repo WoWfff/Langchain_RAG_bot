@@ -58,7 +58,7 @@ async def init_services(app: FastAPI, checkpointer):
             embedding=embedding_model,
             encoding_model=encoding_model,
             collection_name=COLLECTION_NAME,
-            skip_downloading=True,
+            skip_downloading=False,
         )
 
         app.state.progress = 50
