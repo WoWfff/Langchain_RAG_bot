@@ -114,3 +114,16 @@ class InvalidAgentResponseError(AgentException):
 
     def __init__(self, message: str = "Invalid agent response format"):
         super().__init__(message)
+
+
+class RateLimitError(AgentException):
+    """Raised when API rate limit is exceeded"""
+
+    def __init__(self, retry_after: int | None = None, message: str | None = None):
+        self.retry_after = retry_after
+        if message:
+            super().__init__(message)
+        elif retry_after:
+            super().__init__(f"Rate limit exceeded. Please retry after {retry_after} seconds.")
+        else:
+            super().__init__("Rate limit exceeded. Please try again later.")

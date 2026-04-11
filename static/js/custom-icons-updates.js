@@ -249,20 +249,30 @@ async function deleteSelectedThreads() {
         return;
     }
     
-    if (!confirm(`Delete ${state.selectedThreads.length} selected chat(s)?`)) {
+    const deleteCount = state.selectedThreads.length;
+    
+    if (!confirm(`Delete ${deleteCount} selected chat(s)?`)) {
         return;
     }
     
     try {
+        console.log('Deleting threads:', state.selectedThreads);
+        console.log('Delete count:', deleteCount);
+        
         // Delete all selected threads
-        const deletePromises = state.selectedThreads.map(threadId => 
-            fetch(`${API.threads}/${threadId}`, {
+        const deletePromises = state.selectedThreads.map(async threadId => {
+            const response = await fetch(`${API.threads}/${threadId}`, {
                 method: 'DELETE',
                 credentials: 'include'
-            })
-        );
+            });
+            if (!response.ok) {
+                console.error(`Failed to delete thread ${threadId}:`, response.status);
+            }
+            return response;
+        });
         
-        await Promise.all(deletePromises);
+        const results = await Promise.all(deletePromises);
+        console.log('Delete results:', results.map(r => r.status));
         
         // If current thread was deleted, clear it
         if (state.selectedThreads.includes(state.currentThreadId)) {
@@ -275,7 +285,8 @@ async function deleteSelectedThreads() {
         toggleSelectionMode();
         await loadThreads();
         
-        showNotification(`${state.selectedThreads.length} chat(s) deleted`, 'success');
+        console.log('Showing notification with count:', deleteCount);
+        showNotification(`${deleteCount} chat(s) deleted`, 'success');
     } catch (error) {
         console.error('Error deleting threads:', error);
         showNotification('Error deleting chats', 'error');

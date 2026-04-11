@@ -7,6 +7,7 @@ from app.models.exceptions import (
     AgentHistoryError,
     AgentProcessingError,
     InvalidAgentResponseError,
+    RateLimitError,
     ThreadAlreadyExistsError,
     ThreadNotFoundError,
     ThreadNotFoundOrDoestBelongError,
@@ -59,6 +60,16 @@ def register_exception_handlers(app):
     async def invalid_agent_response_handler(request: Request, exc: InvalidAgentResponseError):  # noqa: RUF029
         logger.error(f"Invalid agent response: {exc}")
         return JSONResponse(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, content={"detail": str(exc)})
+
+    @app.exception_handler(RateLimitError)
+    async def rate_limit_error_handler(request: Request, exc: RateLimitError):  # noqa: RUF029
+        logger.warning(f"Rate limit exceeded: {exc}")
+        headers = {}
+        if exc.retry_after:
+            headers["Retry-After"] = str(exc.retry_after)
+        return JSONResponse(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS, content={"detail": str(exc)}, headers=headers
+        )
 
     @app.exception_handler(Exception)
     async def general_exception_handler(request: Request, exc: Exception):  # noqa: RUF029
