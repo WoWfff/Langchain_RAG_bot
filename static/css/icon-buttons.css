@@ -60,7 +60,7 @@
 .icon-btn-modern:hover .BG {
     transform: rotate(15deg);
     transform-origin: bottom;
-    background: linear-gradient(135deg, var(--accent), #6a5acd);
+    background: var(--accent);
 }
 
 .icon-btn-modern:hover .svgContainer {
@@ -78,7 +78,7 @@
 }
 
 .icon-btn-modern.home-btn:hover .svgContainer svg {
-    stroke: var(--accent);
+    stroke: white;
 }
 
 .icon-btn-modern:active {
