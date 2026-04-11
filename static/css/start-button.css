@@ -22,7 +22,7 @@
     margin: 0;
     width: 3rem;
     height: 3rem;
-    background: var(--accent);
+    background: #3a3a3a;
     border-radius: 1.625rem;
 }
 
@@ -32,7 +32,7 @@
     top: 0;
     bottom: 0;
     margin: auto;
-    background: #fff;
+    background: #d0d0d0;
 }
 
 .learn-more .circle .icon.arrow {
@@ -50,8 +50,8 @@
     right: 0.0625rem;
     width: 0.625rem;
     height: 0.625rem;
-    border-top: 0.125rem solid #fff;
-    border-right: 0.125rem solid #fff;
+    border-top: 0.125rem solid #d0d0d0;
+    border-right: 0.125rem solid #d0d0d0;
     transform: rotate(45deg);
 }
 
@@ -73,17 +73,17 @@
 
 .learn-more:hover .circle {
     width: 100%;
-    background: linear-gradient(135deg, var(--accent), #6a5acd);
-    box-shadow: 0 4px 15px rgba(74, 158, 255, 0.4);
+    background: #4a4a4a;
+    box-shadow: 0 4px 15px rgba(74, 74, 74, 0.5);
 }
 
 .learn-more:hover .circle .icon.arrow {
-    background: #fff;
+    background: #d0d0d0;
     transform: translate(1rem, 0);
 }
 
 .learn-more:hover .button-text {
-    color: #fff;
+    color: #d0d0d0;
 }
 
 .learn-more:active {
