@@ -91,21 +91,11 @@ body {
 }
 
 .landing-header h1 {
-    font-size: 5rem;
+    font-size: 7rem;
     margin: 0 0 30px 0;
-    background: linear-gradient(135deg, var(--accent), #6a9fff);
-    background-size: 200% auto;
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-    animation: gradientShift 3s ease infinite;
-    font-weight: 900;
+    color: var(--text-primary);
+    font-weight: 700;
     letter-spacing: -2px;
-}
-
-@keyframes gradientShift {
-    0%, 100% { background-position: 0% center; }
-    50% { background-position: 100% center; }
 }
 
 .description {
