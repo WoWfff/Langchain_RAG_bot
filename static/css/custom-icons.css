@@ -46,6 +46,10 @@
     stroke-dashoffset: 0;
 }
 
+[data-theme="light"] .select-all-container .path {
+    stroke: #333 !important;
+}
+
 .select-all-container:hover .path {
     stroke: #1a1a1a;
 }
@@ -108,6 +112,10 @@
     transition: stroke-dasharray 400ms cubic-bezier(0.4, 0, 0.2, 1),
                 stroke-dashoffset 400ms cubic-bezier(0.4, 0, 0.2, 1),
                 stroke 0.3s ease;
+}
+
+[data-theme="light"] .hamburger .line {
+    stroke: #333 !important;
 }
 
 .hamburger:hover .line {
