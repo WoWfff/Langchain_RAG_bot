@@ -41,41 +41,63 @@
         <div id="landing-page" class="landing-page">
             <header class="landing-header">
                 <h1>RAG Bot</h1>
+                <p class="description">Advanced conversational AI with retrieval-augmented generation technology for accurate, context-aware responses</p>
                 <p class="subtitle">AI-Powered Intelligent Assistant</p>
             </header>
 
             <section class="features">
                 <h2>Key Features</h2>
                 <div class="features-grid">
-                <div class="feature-card">
-                    <div class="feature-icon" data-icon="message"></div>
-                    <h3>Smart Conversations</h3>
-                    <p>Context-aware responses using RAG technology</p>
+                    <div class="feature-card">
+                        <div class="feature-icon" data-icon="message"></div>
+                        <h3>Smart Conversations</h3>
+                        <p>Context-aware responses using advanced RAG technology for intelligent dialogue</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon" data-icon="book"></div>
+                        <h3>Knowledge Sources</h3>
+                        <p>Transparent answers with clear information source references and citations</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon" data-icon="zap"></div>
+                        <h3>Real-time Streaming</h3>
+                        <p>Instant responses with smooth real-time typing effect for natural interaction</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon" data-icon="database"></div>
+                        <h3>Chat History</h3>
+                        <p>Save, organize, and manage all your conversations with persistent storage</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon" data-icon="globe"></div>
+                        <h3>Multi-language Support</h3>
+                        <p>Communicate in multiple languages including English, Ukrainian, and many more</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon" data-icon="shield"></div>
+                        <h3>Secure & Private</h3>
+                        <p>Your conversations are stored locally with full privacy and data security</p>
+                    </div>
                 </div>
-                <div class="feature-card">
-                    <div class="feature-icon" data-icon="book"></div>
-                    <h3>Knowledge Sources</h3>
-                    <p>Transparent answers with information source references</p>
-                </div>
-                <div class="feature-card">
-                    <div class="feature-icon" data-icon="zap"></div>
-                    <h3>Streaming</h3>
-                    <p>Instant responses with real-time typing effect</p>
-                </div>
-                <div class="feature-card">
-                    <div class="feature-icon" data-icon="database"></div>
-                    <h3>Chat History</h3>
-                    <p>Save and manage all your conversations</p>
-                </div>
-                </div>
+                
+                <button id="start-chat-btn" class="learn-more">
+                    <span class="circle" aria-hidden="true">
+                        <span class="icon arrow"></span>
+                    </span>
+                    <span class="button-text">Start Chat</span>
+                </button>
             </section>
 
-            <button id="start-chat-btn" class="learn-more">
-                <span class="circle" aria-hidden="true">
-                    <span class="icon arrow"></span>
-                </span>
-                <span class="button-text">Start Chat</span>
-            </button>
+            <section class="tech-stack">
+                <h2>Built With Modern Technology</h2>
+                <div class="tech-badges">
+                    <span class="tech-badge">Python</span>
+                    <span class="tech-badge">FastAPI</span>
+                    <span class="tech-badge">LangChain</span>
+                    <span class="tech-badge">ChromaDB</span>
+                    <span class="tech-badge">PostgreSQL</span>
+                </div>
+            </section>
         </div>
 
         <!-- Chat Interface -->
@@ -221,6 +243,7 @@
         </div>
     </div>
 
+    <script src="/static/js/stars.js"></script>
     <script src="/static/js/main.js?v=14"></script>
     <script src="/static/js/custom-icons-updates.js?v=3"></script>
 </body>
