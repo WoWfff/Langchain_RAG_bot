@@ -153,6 +153,7 @@ class Agent:
         debug: bool = False,
     ) -> GraphOutput | AgentResult:
         try:
+            logger.info(f"Starting process_message for thread: {thread_id}")
             result: GraphOutput = await self.agent.ainvoke(
                 input={
                     "messages": [HumanMessage(content=message)],
@@ -192,6 +193,7 @@ class Agent:
         debug: bool = False,
     ) -> AsyncGenerator[AgentResult | dict]:
         try:
+            logger.info(f"Starting stream_message for thread: {thread_id}")
             async for chunk in self.agent.astream(
                 input={"messages": [{"role": "user", "content": message}]},
                 stream_mode=["messages"],
