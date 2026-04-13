@@ -17,6 +17,7 @@ const state = {
     threads: [],
     messages: {},
     streamingStates: {}, // Track streaming state per thread
+    activeStreams: {}, // Track active SSE streams per thread
     theme: localStorage.getItem('theme') || 'dark',
     pinnedThreads: JSON.parse(localStorage.getItem('pinnedThreads') || '[]'),
     editingThreadId: null,
@@ -100,34 +101,56 @@ async function init() {
 
 // Check Server Health
 async function checkServerHealth() {
-    const maxAttempts = 30;
-    let attempts = 0 
+    const maxAttempts = 60;
+    let attempts = 0;
+    let serverStarted = false;
 
     while (attempts < maxAttempts) {
         try {
-            elements.loadingStatus.textContent = `Connection attempt ${attempts + 1}/${maxAttempts}...`;
-            
             const response = await fetch(API.healthStatus, {
                 credentials: 'include'
             });
             
             if (response.ok) {
                 const data = await response.json();
+                
+                // Server responded - it has started
+                serverStarted = true;
+                
                 if (data.is_ready) {
                     elements.loadingStatus.textContent = 'Server ready!';
                     await new Promise(resolve => setTimeout(resolve, 500));
                     showMainContainer();
                     return;
                 } else {
-                    elements.loadingStatus.textContent = data.status || 'Loading...';
+                    // Show progress and status
+                    const progressText = data.progress ? `${data.progress}%` : '';
+                    const statusText = data.status || 'Loading...';
+                    elements.loadingStatus.textContent = progressText ? `${statusText} (${progressText})` : statusText;
                 }
+                
+                // Server is loading, check more frequently
+                await new Promise(resolve => setTimeout(resolve, 500));
+            } else {
+                // Server not ready yet
+                if (!serverStarted) {
+                    elements.loadingStatus.textContent = `Waiting for server to start... (${attempts + 1}/${maxAttempts})`;
+                }
+                await new Promise(resolve => setTimeout(resolve, 2000));
             }
         } catch (error) {
-            console.log('Waiting for server to start...');
+            // Connection failed - server not started yet
+            if (!serverStarted) {
+                elements.loadingStatus.textContent = `Waiting for server to start... (${attempts + 1}/${maxAttempts})`;
+                await new Promise(resolve => setTimeout(resolve, 2000));
+            } else {
+                // Server was running but now connection failed
+                console.error('Lost connection to server:', error);
+                await new Promise(resolve => setTimeout(resolve, 1000));
+            }
         }
         
         attempts++;
-        await new Promise(resolve => setTimeout(resolve, 1000));
     }
     
     elements.loadingStatus.textContent = 'Failed to connect to server';
@@ -263,7 +286,7 @@ function renderThreads() {
             minute: '2-digit'
         });
         
-        const threadName = thread.name || `Chat ${thread.thread_id.slice(0, 8)}`;
+        const threadName = thread.thread_name || thread.name || `Chat ${thread.thread_id.slice(0, 8)}`;
         const isPinned = state.pinnedThreads.includes(thread.thread_id);
         
         const isSelected = state.selectedThreads.includes(thread.thread_id);
@@ -403,6 +426,9 @@ async function createNewThread() {
 // Select Thread
 async function selectThread(threadId) {
     try {
+        // Don't abort streams - let them continue in background
+        // This allows users to switch between chats while messages are being generated
+        
         // Activate thread
         const activateUrl = API.activateThread.replace('{id}', threadId);
         await fetch(activateUrl, {
@@ -522,7 +548,8 @@ async function saveThreadName(threadId, newName) {
         // Update local state
         const thread = state.threads.find(t => t.thread_id === threadId);
         if (thread) {
-            thread.name = newName.trim();
+            thread.thread_name = newName.trim();
+            thread.name = newName.trim(); // Keep both for compatibility
         }
         
         state.editingThreadId = null;
@@ -714,10 +741,12 @@ async function loadMessages(threadId) {
         
         // If there's a streaming or loading message, don't reload from API - just render what we have
         if (streamingMessage || loadingMessage) {
-            console.log('Streaming or loading in progress, skipping API reload');
+            console.log('[LOAD_MESSAGES] Streaming or loading in progress, skipping API reload');
             renderMessages();
             return;
         }
+        
+        console.log('[LOAD_MESSAGES] Loading messages from API for thread:', threadId);
         
         const historyUrl = `${API.chatHistory}/${threadId}`;
         const response = await fetch(historyUrl, {
@@ -752,12 +781,19 @@ async function loadMessages(threadId) {
 
 // Render Messages
 function renderMessages() {
+    console.log('[RENDER_MESSAGES] Starting render for thread:', state.currentThreadId);
     elements.messagesContainer.innerHTML = '';
     
     const messages = state.messages[state.currentThreadId] || [];
     
-    console.log('Rendering messages for thread:', state.currentThreadId);
-    console.log('Streaming states:', state.streamingStates);
+    console.log('[RENDER_MESSAGES] Messages count:', messages.length);
+    console.log('[RENDER_MESSAGES] Messages:', messages.map(m => ({ 
+        type: m.type, 
+        id: m.id, 
+        streaming: m.streaming, 
+        loading: m.loading,
+        contentLength: m.content?.length || 0
+    })));
     
     if (messages.length === 0) {
         elements.messagesContainer.innerHTML = `
@@ -769,19 +805,22 @@ function renderMessages() {
         return;
     }
     
-    messages.forEach(msg => {
+    messages.forEach((msg, index) => {
+        console.log(`[RENDER_MESSAGES] Creating element ${index + 1}/${messages.length}`);
         const messageEl = createMessageElement(msg);
         
         // Add data attribute for streaming/loading messages
         if (msg.id) {
             messageEl.setAttribute('data-message-id', msg.id);
+            if (msg.threadId) {
+                messageEl.setAttribute('data-thread-id', msg.threadId);
+            }
+            
             // Restore streaming state if exists
             if (msg.streaming) {
                 const streamState = state.streamingStates[state.currentThreadId];
-                console.log('Checking streaming state for message:', msg.id, 'State:', streamState);
                 if (streamState && streamState.messageId === msg.id) {
-                    console.log('Restoring streaming state with text:', streamState.displayedText);
-                    // Restore the streaming content
+                    console.log('[RENDER_MESSAGES] Restoring streaming state, text length:', streamState.displayedText?.length);
                     const messageText = messageEl.querySelector('.message-text');
                     if (messageText && streamState.displayedText) {
                         const contentWrapper = document.createElement('span');
@@ -798,27 +837,31 @@ function renderMessages() {
                         
                         messageEl.dataset.displayedText = streamState.displayedText;
                     }
+                    
+                    if (streamState.sources && streamState.sources.length > 0) {
+                        updateMessageSources(messageEl, streamState.sources);
+                    }
                 }
-            }
-            // Loading messages always show cursor (no content to restore)
-            if (msg.loading) {
-                console.log('Rendering loading message with cursor:', msg.id);
             }
         }
         
         // Add fade-in animation for new messages
-        if (!msg.streaming) {
+        if (!msg.streaming && !msg.loading) {
             messageEl.classList.add('fade-in');
         }
         
         elements.messagesContainer.appendChild(messageEl);
+        console.log(`[RENDER_MESSAGES] Element ${index + 1} appended`);
     });
     
+    console.log('[RENDER_MESSAGES] Render complete, scrolling to bottom');
     scrollToBottom();
 }
 
 // Create Message Element
 function createMessageElement(msg) {
+    console.log('[CREATE_ELEMENT] Type:', msg.type, 'Streaming:', msg.streaming, 'Loading:', msg.loading, 'Content:', msg.content?.substring(0, 50));
+    
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${msg.type}`;
     
@@ -831,11 +874,9 @@ function createMessageElement(msg) {
         avatar = Icons.bot;
     }
     
-    console.log('Creating message element:', { type: msg.type, sourcesCount: msg.sources?.length || 0 });
-    
     let sourcesHtml = '';
     if (msg.type === 'assistant' && msg.sources && msg.sources.length > 0) {
-        console.log('Adding sources HTML for', msg.sources.length, 'sources');
+        console.log('[CREATE_ELEMENT] Adding sources:', msg.sources.length);
         sourcesHtml = `
             <div class="message-sources">
                 <div class="sources-header" onclick="toggleSources(this)">
@@ -862,9 +903,12 @@ function createMessageElement(msg) {
     // Handle streaming/loading indicator and markdown
     let contentHtml;
     if (msg.streaming || msg.loading) {
-        // During streaming or loading, render markdown but keep the cursor
-        const textWithoutCursor = msg.content.replace(/<span class="typing-indicator">.*?<\/span>/, '');
-        contentHtml = renderMarkdown(textWithoutCursor) + '<span class="typing-indicator">▋</span>';
+        console.log('[CREATE_ELEMENT] Creating streaming/loading message, has content:', !!msg.content);
+        // For streaming/loading, create proper structure with wrapper and cursor
+        const textContent = msg.content ? msg.content.replace(/<span class="typing-indicator">.*?<\/span>/, '') : '';
+        const renderedContent = textContent ? renderMarkdown(textContent) : '';
+        contentHtml = `<span class="streaming-content">${renderedContent}</span><span class="typing-indicator">▋</span>`;
+        console.log('[CREATE_ELEMENT] Content HTML length:', contentHtml.length);
     } else {
         contentHtml = renderMarkdown(msg.content);
     }
@@ -877,6 +921,7 @@ function createMessageElement(msg) {
         </div>
     `;
     
+    console.log('[CREATE_ELEMENT] Element created successfully');
     return messageDiv;
 }
 
@@ -973,8 +1018,11 @@ async function sendMessage() {
         }
     }
     
-    // Add user message
-    addUserMessage(message);
+    // Save the thread ID at the moment of sending
+    const targetThreadId = state.currentThreadId;
+    
+    // Add user message to the target thread
+    addUserMessage(message, targetThreadId);
     elements.messageInput.value = '';
     autoResizeTextarea();
     
@@ -983,9 +1031,9 @@ async function sendMessage() {
     
     try {
         if (elements.streamingToggle.checked) {
-            await streamMessage(message);
+            await streamMessage(message, targetThreadId);
         } else {
-            await processMessage(message);
+            await processMessage(message, targetThreadId);
         }
     } catch (error) {
         console.error('Error sending message:', error);
@@ -996,51 +1044,56 @@ async function sendMessage() {
 }
 
 // Add User Message
-function addUserMessage(content) {
-    const messages = state.messages[state.currentThreadId] || [];
+function addUserMessage(content, targetThreadId) {
+    const messages = state.messages[targetThreadId] || [];
     const isFirstMessage = messages.length === 0;
-    
-    // If this is the first message, hide welcome message
-    if (isFirstMessage) {
-        const welcomeMsg = elements.messagesContainer.querySelector('.welcome-message');
-        if (welcomeMsg) {
-            welcomeMsg.classList.add('fade-out');
-            setTimeout(() => {
-                welcomeMsg.remove();
-            }, 500);
-        }
-    }
     
     messages.push({
         type: 'user',
         content: content
     });
-    state.messages[state.currentThreadId] = messages;
+    state.messages[targetThreadId] = messages;
     
-    // Enable auto-scroll for new messages
-    state.autoScroll = true;
-    
-    // Instead of re-rendering everything, just append the new message
-    const messageEl = createMessageElement({
-        type: 'user',
-        content: content
-    });
-    
-    // Add slide-up animation for first message, fade-in for others
-    if (isFirstMessage) {
-        messageEl.classList.add('slide-up');
-    } else {
-        messageEl.classList.add('fade-in');
+    // Only update UI if this is the current thread
+    if (targetThreadId === state.currentThreadId) {
+        // If this is the first message, hide welcome message
+        if (isFirstMessage) {
+            const welcomeMsg = elements.messagesContainer.querySelector('.welcome-message');
+            if (welcomeMsg) {
+                welcomeMsg.classList.add('fade-out');
+                setTimeout(() => {
+                    welcomeMsg.remove();
+                }, 500);
+            }
+        }
+        
+        // Enable auto-scroll for new messages
+        state.autoScroll = true;
+        
+        // Append the new message
+        const messageEl = createMessageElement({
+            type: 'user',
+            content: content
+        });
+        
+        // Add slide-up animation for first message, fade-in for others
+        if (isFirstMessage) {
+            messageEl.classList.add('slide-up');
+        } else {
+            messageEl.classList.add('fade-in');
+        }
+        
+        elements.messagesContainer.appendChild(messageEl);
+        scrollToBottom();
     }
-    
-    elements.messagesContainer.appendChild(messageEl);
-    scrollToBottom();
 }
 
 // Process Message (Non-streaming)
-async function processMessage(message) {
+async function processMessage(message, targetThreadId) {
+    console.log('[PROCESS] Starting process for thread:', targetThreadId, 'Current thread:', state.currentThreadId);
+    
     // Add loading message with cursor
-    const loadingMessageId = addLoadingMessage();
+    const loadingMessageId = addLoadingMessage(targetThreadId);
     
     try {
         const response = await fetch(API.processMessage, {
@@ -1052,79 +1105,109 @@ async function processMessage(message) {
             body: JSON.stringify({ message })
         });
         
-        if (!response.ok) throw new Error('Failed to process message');
+        if (!response.ok) {
+            // Check if it's a rate limit error
+            if (response.status === 429) {
+                const errorData = await response.json();
+                let errorMessage = errorData.detail || 'Rate limit exceeded';
+                
+                // Try to extract retry_after from Retry-After header
+                const retryAfter = response.headers.get('Retry-After');
+                if (retryAfter) {
+                    errorMessage += ` Please wait ${retryAfter} seconds before trying again.`;
+                }
+                
+                removeLoadingMessage(loadingMessageId, targetThreadId);
+                addErrorMessage(errorMessage, targetThreadId);
+                return;
+            }
+            throw new Error('Failed to process message');
+        }
         
         const data = await response.json();
         
         // Remove loading message
-        removeLoadingMessage(loadingMessageId);
+        removeLoadingMessage(loadingMessageId, targetThreadId);
         
         // Add actual response
-        addAssistantMessage(data);
+        addAssistantMessage(data, targetThreadId);
     } catch (error) {
         // Remove loading message on error
-        removeLoadingMessage(loadingMessageId);
+        removeLoadingMessage(loadingMessageId, targetThreadId);
         throw error;
     }
 }
 
 // Add Loading Message
-function addLoadingMessage() {
-    const messages = state.messages[state.currentThreadId] || [];
-    const id = Date.now();
+function addLoadingMessage(threadId) {
+    console.log('[ADD_LOADING] Thread:', threadId, 'Current:', state.currentThreadId);
+    const messages = state.messages[threadId] || [];
+    const id = `${threadId}-${Date.now()}`;
     const msg = {
         id: id,
         type: 'assistant',
         content: '',
         sources: [],
-        loading: true
+        loading: true,
+        threadId: threadId
     };
     
-    // Check if this is second message (first assistant message)
     const isSecondMessage = messages.length === 1;
     
     messages.push(msg);
-    state.messages[state.currentThreadId] = messages;
+    state.messages[threadId] = messages;
     
-    // Append the loading message without re-rendering
-    const messageEl = createMessageElement(msg);
-    messageEl.setAttribute('data-message-id', id);
-    
-    // Add slide-up for second message, fade-in for others
-    if (isSecondMessage) {
-        messageEl.classList.add('slide-up');
-    } else {
-        messageEl.classList.add('fade-in');
+    // Only render if this is the current thread
+    if (threadId === state.currentThreadId) {
+        const messageEl = createMessageElement(msg);
+        messageEl.setAttribute('data-message-id', id);
+        messageEl.setAttribute('data-thread-id', threadId);
+        
+        if (isSecondMessage) {
+            messageEl.classList.add('slide-up');
+        } else {
+            messageEl.classList.add('fade-in');
+        }
+        
+        elements.messagesContainer.appendChild(messageEl);
+        scrollToBottom();
     }
-    
-    elements.messagesContainer.appendChild(messageEl);
-    scrollToBottom();
     
     return id;
 }
 
 // Remove Loading Message
-function removeLoadingMessage(id) {
-    const messages = state.messages[state.currentThreadId] || [];
+function removeLoadingMessage(id, threadId) {
+    console.log('[REMOVE_LOADING] ID:', id, 'Thread:', threadId, 'Current:', state.currentThreadId);
+    const messages = state.messages[threadId] || [];
     const index = messages.findIndex(m => m.id === id);
     if (index !== -1) {
         messages.splice(index, 1);
-        state.messages[state.currentThreadId] = messages;
+        state.messages[threadId] = messages;
         
-        // Remove the element from DOM without re-rendering
+        // Always try to remove from DOM (it might be visible if user switched back)
         const messageEl = elements.messagesContainer.querySelector(`[data-message-id="${id}"]`);
         if (messageEl) {
+            console.log('[REMOVE_LOADING] Removing element from DOM');
             messageEl.remove();
+        } else {
+            console.log('[REMOVE_LOADING] Element not in DOM (thread not active)');
         }
     }
 }
 
 // Stream Message (SSE)
-async function streamMessage(message) {
-    const assistantMessageId = addStreamingMessage();
+async function streamMessage(message, targetThreadId) {
+    console.log('[STREAM] Starting stream for thread:', targetThreadId, 'Current thread:', state.currentThreadId);
+    const assistantMessageId = addStreamingMessage(targetThreadId);
+    
+    // Create AbortController for this stream
+    const abortController = new AbortController();
+    state.activeStreams[targetThreadId] = abortController;
     
     try {
         const response = await fetch(API.streamMessage, {
+            signal: abortController.signal,
             method: 'POST',
             credentials: 'include',
             headers: {
@@ -1139,16 +1222,21 @@ async function streamMessage(message) {
         const decoder = new TextDecoder();
         let buffer = '';
         let fullText = '';
-        let accumulatedSources = []; // Accumulate sources from multiple chunks
+        let accumulatedSources = [];
+        
+        console.log('[STREAM] Starting to read response body');
         
         while (true) {
             const { done, value } = await reader.read();
-            if (done) break;
+            console.log('[STREAM] Read chunk, done:', done, 'value length:', value?.length);
+            if (done) {
+                console.log('[STREAM] Stream complete');
+                break;
+            }
             
             buffer += decoder.decode(value, { stream: true });
             const lines = buffer.split('\n\n');
             
-            // Keep the last incomplete chunk in buffer
             if (!buffer.endsWith('\n\n')) {
                 buffer = lines.pop() || '';
             } else {
@@ -1166,39 +1254,29 @@ async function streamMessage(message) {
                         const data = JSON.parse(dataMatch[1]);
                         const eventType = eventMatch ? eventMatch[1] : 'chunk';
                         
-                        console.log('Received event:', eventType, data);
+                        console.log('[STREAM] Event:', eventType, 'Thread:', targetThreadId, 'Data:', data);
                         
-                        // Handle error events
                         if (eventType === 'error' || data.type === 'RateLimitError') {
-                            removeStreamingMessage(assistantMessageId);
+                            removeStreamingMessage(assistantMessageId, targetThreadId);
                             
                             let errorMessage = data.error || 'An error occurred';
                             if (data.retry_after) {
                                 errorMessage += ` Please wait ${data.retry_after} seconds before trying again.`;
                             }
                             
-                            // Add error as assistant message
-                            addErrorMessage(errorMessage);
+                            addErrorMessage(errorMessage, targetThreadId);
                             enableInput();
-                            return; // Stop processing
-                        }
-                        
-                        if (data.tool_response) {
-                            console.log('Tool response details:', JSON.stringify(data.tool_response, null, 2));
+                            return;
                         }
                         
                         if (data.response_text) {
                             fullText += data.response_text;
-                            updateStreamingMessage(assistantMessageId, fullText, accumulatedSources);
+                            console.log('[STREAM] Updating text, length:', fullText.length);
+                            updateStreamingMessage(assistantMessageId, fullText, accumulatedSources, targetThreadId);
                         }
                         
                         if (data.tool_response && data.tool_response.length > 0) {
-                            // Accumulate sources from multiple chunks
-                            console.log('Before accumulation:', accumulatedSources.length, 'sources');
-                            console.log('New sources received:', data.tool_response.length);
-                            
                             data.tool_response.forEach(newSource => {
-                                // Check if source already exists (by source, text, and chunk_index)
                                 const exists = accumulatedSources.some(existing => 
                                     existing.source === newSource.source && 
                                     existing.text === newSource.text &&
@@ -1206,86 +1284,122 @@ async function streamMessage(message) {
                                 );
                                 if (!exists) {
                                     accumulatedSources.push(newSource);
-                                    console.log('Added new source:', newSource.source, 'chunk:', newSource.chunk_index);
-                                } else {
-                                    console.log('Skipped duplicate source:', newSource.source, 'chunk:', newSource.chunk_index);
                                 }
                             });
-                            
-                            console.log('After accumulation:', accumulatedSources.length, 'sources');
-                            updateStreamingMessage(assistantMessageId, fullText, accumulatedSources);
+                            console.log('[STREAM] Total sources:', accumulatedSources.length);
+                            updateStreamingMessage(assistantMessageId, fullText, accumulatedSources, targetThreadId);
                         }
                     } catch (e) {
-                        console.error('Error parsing SSE data:', e, dataMatch[1]);
+                        console.error('[STREAM] Error parsing SSE data:', e, dataMatch[1]);
                     }
                 }
             }
         }
         
-        finalizeStreamingMessage(assistantMessageId, fullText, accumulatedSources);
+        console.log('[STREAM] Stream reading complete for thread:', targetThreadId);
+        console.log('[STREAM] Final text length:', fullText.length, 'Total sources:', accumulatedSources.length);
+        console.log('[STREAM] Finalizing message for thread:', targetThreadId);
+        finalizeStreamingMessage(assistantMessageId, fullText, accumulatedSources, targetThreadId);
+        console.log('[STREAM] Stream fully completed for thread:', targetThreadId);
     } catch (error) {
-        console.error('Streaming error:', error);
-        removeStreamingMessage(assistantMessageId);
+        if (error.name === 'AbortError') {
+            console.log('[STREAM] Stream aborted for thread:', targetThreadId);
+            // Don't remove the message - keep partial content
+            console.log('[STREAM] Keeping partial message, finalizing with current content');
+            const messages = state.messages[targetThreadId] || [];
+            const msg = messages.find(m => m.id === assistantMessageId);
+            if (msg && msg.content) {
+                // Finalize with whatever content we have
+                finalizeStreamingMessage(assistantMessageId, msg.content, msg.sources || [], targetThreadId);
+            } else {
+                // No content yet, remove the message
+                removeStreamingMessage(assistantMessageId, targetThreadId);
+            }
+            return;
+        }
+        console.error('[STREAM] Error:', error);
+        removeStreamingMessage(assistantMessageId, targetThreadId);
         throw error;
+    } finally {
+        delete state.activeStreams[targetThreadId];
+        if (state.streamingStates[targetThreadId]) {
+            delete state.streamingStates[targetThreadId];
+        }
     }
 }
 
 // Add Streaming Message
-function addStreamingMessage() {
-    const messages = state.messages[state.currentThreadId] || [];
-    const id = Date.now();
+function addStreamingMessage(threadId) {
+    console.log('[ADD_STREAMING] Thread:', threadId, 'Current:', state.currentThreadId);
+    const messages = state.messages[threadId] || [];
+    const id = `${threadId}-${Date.now()}`;
     const msg = {
         id: id,
         type: 'assistant',
         content: '',
         sources: [],
-        streaming: true
+        streaming: true,
+        threadId: threadId
     };
     
-    // Check if this is second message (first assistant message)
     const isSecondMessage = messages.length === 1;
     
     messages.push(msg);
-    state.messages[state.currentThreadId] = messages;
+    state.messages[threadId] = messages;
     
-    // Create the message element immediately without re-rendering
-    const messageEl = createMessageElement(msg);
-    messageEl.setAttribute('data-message-id', id);
+    console.log('[ADD_STREAMING] Message added to state, messages count:', messages.length);
     
-    // Add slide-up for second message, fade-in for others
-    if (isSecondMessage) {
-        messageEl.classList.add('slide-up');
+    // Only render if this is the current thread
+    if (threadId === state.currentThreadId) {
+        console.log('[ADD_STREAMING] Creating DOM element');
+        const messageEl = createMessageElement(msg);
+        messageEl.setAttribute('data-message-id', id);
+        messageEl.setAttribute('data-thread-id', threadId);
+        
+        if (isSecondMessage) {
+            messageEl.classList.add('slide-up');
+        } else {
+            messageEl.classList.add('fade-in');
+        }
+        
+        elements.messagesContainer.appendChild(messageEl);
+        console.log('[ADD_STREAMING] Element appended to DOM');
+        scrollToBottom();
     } else {
-        messageEl.classList.add('fade-in');
+        console.log('[ADD_STREAMING] Not current thread, skipping DOM update');
     }
-    
-    elements.messagesContainer.appendChild(messageEl);
-    scrollToBottom();
     
     return id;
 }
 
 // Update Streaming Message
-function updateStreamingMessage(id, content, sources) {
-    const threadId = state.currentThreadId;
+function updateStreamingMessage(id, content, sources, threadId) {
+    console.log('[UPDATE_STREAMING] ID:', id, 'Thread:', threadId, 'Current:', state.currentThreadId, 'Content length:', content.length);
     const messages = state.messages[threadId] || [];
     const msg = messages.find(m => m.id === id);
-    if (msg) {
-        msg.content = content;
-        msg.sources = sources || [];
-        
-        // Save streaming state for this thread
-        state.streamingStates[threadId] = {
-            messageId: id,
-            displayedText: content,
-            sources: sources || []
-        };
-        
-        // Update only the specific message instead of re-rendering all
+    
+    if (!msg) {
+        console.error('[UPDATE_STREAMING] Message not found in state!');
+        return;
+    }
+    
+    msg.content = content;
+    msg.sources = sources || [];
+    
+    // Save streaming state for this thread
+    state.streamingStates[threadId] = {
+        messageId: id,
+        displayedText: content,
+        sources: sources || []
+    };
+    
+    // Only update UI if this is the current thread
+    if (threadId === state.currentThreadId) {
+        console.log('[UPDATE_STREAMING] Updating DOM element');
         updateMessageElement(id, content, sources, true);
-        
-        // Auto-scroll if enabled
         scrollToBottom();
+    } else {
+        console.log('[UPDATE_STREAMING] Not current thread, skipping DOM update');
     }
 }
 
@@ -1310,83 +1424,71 @@ function updateMessageElement(id, content, sources, isStreaming) {
     let messageEl = container.querySelector(`[data-message-id="${id}"]`);
     
     if (!messageEl) {
-        // Create new message element if it doesn't exist
-        const messages = state.messages[state.currentThreadId] || [];
-        const msg = messages.find(m => m.id === id);
-        if (msg) {
-            messageEl = createMessageElement(msg);
-            messageEl.setAttribute('data-message-id', id);
-            messageEl.classList.add('fade-in');
-            container.appendChild(messageEl);
-            scrollToBottom();
-        }
+        console.error('[UPDATE_ELEMENT] Message element not found in DOM! ID:', id);
+        const threadId = id.split('-')[0];
+        const allMessages = container.querySelectorAll(`[data-thread-id="${threadId}"]`);
+        console.log('[UPDATE_ELEMENT] Found', allMessages.length, 'messages for thread', threadId);
         return;
     }
     
-    // Update existing message content character by character
+    console.log('[UPDATE_ELEMENT] Updating element, content length:', content.length);
+    
     const messageText = messageEl.querySelector('.message-text');
-    if (messageText) {
-        const textWithoutCursor = content.replace(/<span class="typing-indicator">.*?<\/span>/, '');
+    if (!messageText) {
+        console.error('[UPDATE_ELEMENT] .message-text not found!');
+        return;
+    }
+    
+    const textWithoutCursor = content.replace(/<span class="typing-indicator">.*?<\/span>/, '');
+    
+    // Get or create content wrapper and cursor
+    let contentWrapper = messageText.querySelector('.streaming-content');
+    let cursor = messageText.querySelector('.typing-indicator');
+    
+    if (!contentWrapper || !cursor) {
+        console.log('[UPDATE_ELEMENT] Creating streaming structure');
+        // Create structure if it doesn't exist
+        contentWrapper = document.createElement('span');
+        contentWrapper.className = 'streaming-content';
         
-        // Get or create content wrapper
-        let contentWrapper = messageText.querySelector('.streaming-content');
-        let cursor = messageText.querySelector('.typing-indicator');
+        cursor = document.createElement('span');
+        cursor.className = 'typing-indicator';
+        cursor.textContent = '▋';
         
-        if (!contentWrapper) {
-            // First time - create structure
-            contentWrapper = document.createElement('span');
-            contentWrapper.className = 'streaming-content';
-            messageText.innerHTML = '';
-            messageText.appendChild(contentWrapper);
-            
-            cursor = document.createElement('span');
-            cursor.className = 'typing-indicator';
-            cursor.textContent = '▋';
-            messageText.appendChild(cursor);
-            
-            // Store the raw text being displayed
-            messageEl.dataset.displayedText = '';
-        }
+        messageText.innerHTML = '';
+        messageText.appendChild(contentWrapper);
+        messageText.appendChild(cursor);
         
-        // Get the currently displayed text
-        const displayedText = messageEl.dataset.displayedText || '';
+        messageEl.dataset.displayedText = '';
+    }
+    
+    // Get the currently displayed text
+    const displayedText = messageEl.dataset.displayedText || '';
+    
+    // Only process if there's new content
+    if (textWithoutCursor.length > displayedText.length) {
+        console.log('[UPDATE_ELEMENT] New content detected, old length:', displayedText.length, 'new length:', textWithoutCursor.length);
+        const newChunk = textWithoutCursor.slice(displayedText.length);
         
-        // Only process if there's new content
-        if (textWithoutCursor.length > displayedText.length) {
-            // Get the new chunk
-            const newChunk = textWithoutCursor.slice(displayedText.length);
-            
-            // Update the displayed text
-            messageEl.dataset.displayedText = textWithoutCursor;
-            
-            // Render old content with markdown
-            const oldHtml = displayedText ? renderMarkdown(displayedText) : '';
-            contentWrapper.innerHTML = oldHtml;
-            
-            // Add new chunk as plain text with animation
-            const newSpan = document.createElement('span');
-            newSpan.className = 'streaming-text-chunk';
-            newSpan.textContent = newChunk;
-            contentWrapper.appendChild(newSpan);
-            
-            // After animation, re-render with full markdown
-            setTimeout(() => {
-                const fullHtml = renderMarkdown(textWithoutCursor);
-                contentWrapper.innerHTML = fullHtml;
-            }, 350);
-            
-            // Save streaming state for this thread
-            const threadId = state.currentThreadId;
-            const messages = state.messages[threadId] || [];
-            const msg = messages.find(m => m.id === id);
-            if (msg && msg.streaming) {
-                state.streamingStates[threadId] = {
-                    messageId: id,
-                    displayedText: textWithoutCursor,
-                    sources: sources || []
-                };
-            }
-        }
+        messageEl.dataset.displayedText = textWithoutCursor;
+        
+        // Render old content with markdown
+        const oldHtml = displayedText ? renderMarkdown(displayedText) : '';
+        contentWrapper.innerHTML = oldHtml;
+        
+        // Add new chunk as plain text with animation
+        const newSpan = document.createElement('span');
+        newSpan.className = 'streaming-text-chunk';
+        newSpan.textContent = newChunk;
+        contentWrapper.appendChild(newSpan);
+        
+        // After animation, re-render with full markdown
+        setTimeout(() => {
+            const fullHtml = renderMarkdown(textWithoutCursor);
+            contentWrapper.innerHTML = fullHtml;
+        }, 350);
+    } else {
+        console.log('[UPDATE_ELEMENT] No new content to display');
     }
     
     // Update sources if they exist
@@ -1451,79 +1553,105 @@ function updateMessageSources(messageEl, sources) {
 }
 
 // Finalize Streaming Message
-function finalizeStreamingMessage(id, content, sources) {
-    const threadId = state.currentThreadId;
+function finalizeStreamingMessage(id, content, sources, threadId) {
+    console.log('[FINALIZE_STREAMING] ID:', id, 'Thread:', threadId, 'Current:', state.currentThreadId);
+    console.log('[FINALIZE_STREAMING] Content length:', content.length, 'Sources:', sources?.length || 0);
     const messages = state.messages[threadId] || [];
     const msg = messages.find(m => m.id === id);
-    if (msg) {
-        msg.content = content;
-        msg.sources = sources;
-        msg.streaming = false;
-        
-        // Update the message element one last time without cursor
+    
+    if (!msg) {
+        console.error('[FINALIZE_STREAMING] Message not found in state!');
+        return;
+    }
+    
+    msg.content = content;
+    msg.sources = sources;
+    msg.streaming = false;
+    delete msg.threadId;
+    delete msg.id;
+    
+    console.log('[FINALIZE_STREAMING] Message finalized, total messages in thread:', messages.length);
+    
+    // Only update UI if this is the current thread
+    if (threadId === state.currentThreadId) {
         const messageEl = elements.messagesContainer.querySelector(`[data-message-id="${id}"]`);
         if (messageEl) {
+            console.log('[FINALIZE_STREAMING] Removing cursor and finalizing');
             const messageText = messageEl.querySelector('.message-text');
             if (messageText) {
                 messageText.innerHTML = renderMarkdown(content);
             }
             messageEl.removeAttribute('data-message-id');
+            messageEl.removeAttribute('data-thread-id');
+        } else {
+            console.error('[FINALIZE_STREAMING] Message element not found in DOM!');
         }
-        
-        delete msg.id;
-        
-        // Clear streaming state for this thread
-        if (state.streamingStates[threadId]) {
-            delete state.streamingStates[threadId];
-        }
+    }
+    
+    // Clear streaming state for this thread
+    if (state.streamingStates[threadId]) {
+        delete state.streamingStates[threadId];
     }
 }
 
 // Remove Streaming Message
-function removeStreamingMessage(id) {
-    const messages = state.messages[state.currentThreadId] || [];
+function removeStreamingMessage(id, threadId) {
+    console.log('[REMOVE_STREAMING] ID:', id, 'Thread:', threadId, 'Current:', state.currentThreadId);
+    const messages = state.messages[threadId] || [];
     const index = messages.findIndex(m => m.id === id);
     if (index !== -1) {
         messages.splice(index, 1);
-        state.messages[state.currentThreadId] = messages;
-        renderMessages();
+        state.messages[threadId] = messages;
+        
+        // Only update DOM if this is the current thread
+        if (threadId === state.currentThreadId) {
+            const messageEl = elements.messagesContainer.querySelector(`[data-message-id="${id}"]`);
+            if (messageEl) {
+                console.log('[REMOVE_STREAMING] Removing element from DOM');
+                messageEl.remove();
+            }
+        }
     }
 }
 
 // Add Assistant Message
-function addAssistantMessage(data) {
-    const messages = state.messages[state.currentThreadId] || [];
+function addAssistantMessage(data, targetThreadId) {
+    const messages = state.messages[targetThreadId] || [];
     const msg = {
         type: 'assistant',
         content: data.response_text || '',
         sources: data.tool_response || []
     };
     messages.push(msg);
-    state.messages[state.currentThreadId] = messages;
+    state.messages[targetThreadId] = messages;
     
-    // Append the assistant message without re-rendering
-    const messageEl = createMessageElement(msg);
-    messageEl.classList.add('fade-in');
-    elements.messagesContainer.appendChild(messageEl);
-    scrollToBottom();
+    // Only update UI if this is the current thread
+    if (targetThreadId === state.currentThreadId) {
+        const messageEl = createMessageElement(msg);
+        messageEl.classList.add('fade-in');
+        elements.messagesContainer.appendChild(messageEl);
+        scrollToBottom();
+    }
 }
 
 // Add Error Message
-function addErrorMessage(errorText) {
-    const messages = state.messages[state.currentThreadId] || [];
+function addErrorMessage(errorText, targetThreadId) {
+    const messages = state.messages[targetThreadId] || [];
     const msg = {
         type: 'error',
         content: errorText,
         sources: []
     };
     messages.push(msg);
-    state.messages[state.currentThreadId] = messages;
+    state.messages[targetThreadId] = messages;
     
-    // Append the error message without re-rendering
-    const messageEl = createMessageElement(msg);
-    messageEl.classList.add('fade-in');
-    elements.messagesContainer.appendChild(messageEl);
-    scrollToBottom();
+    // Only update UI if this is the current thread
+    if (targetThreadId === state.currentThreadId) {
+        const messageEl = createMessageElement(msg);
+        messageEl.classList.add('fade-in');
+        elements.messagesContainer.appendChild(messageEl);
+        scrollToBottom();
+    }
 }
 
 // Handle Input Keydown
