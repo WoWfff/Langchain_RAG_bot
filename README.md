@@ -538,9 +538,3 @@ eventSource.addEventListener('error', (event) => {
   }
 });
 ```
-
----
-
-# 📝 License
-
-GPLv3
