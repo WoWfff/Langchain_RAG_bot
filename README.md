@@ -1,3 +1,41 @@
+## 🎬 Demo
+
+<div align="center">
+
+### Stream
+
+<video src="https://github.com/user-attachments/assets/4a0e78b9-e45d-4c68-880c-b4f88cff2c35" controls width="700"></video>
+
+<br><br>
+
+### Non Stream
+
+<video src="https://github.com/user-attachments/assets/4ba52d93-dea9-4c17-b7ee-0067c75d303c" controls width="700"></video>
+
+<br><br>
+
+### Memory
+
+<video src="https://github.com/user-attachments/assets/a3c2275e-5fb3-4975-9ee3-68c292d3fd30" controls width="700"></video>
+
+<br><br>
+
+### Multilang
+
+<video src="https://github.com/user-attachments/assets/078a46b7-b9b3-4215-9838-ed42fcc08c72" controls width="700"></video>
+
+<br><br>
+
+### Interface
+
+<video src="https://github.com/user-attachments/assets/a8345ba6-3d73-40f2-812c-02ba8fe1ee6d" controls width="700"></video>
+
+</div>
+
+
+
+---
+
 # Requirements
 
 * Python 3.13+
