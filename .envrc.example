@@ -1,11 +1,25 @@
-if [ ! -f ".venv/bin/activate" ]; then
+# create venv if missing
+if [ ! -d ".venv" ]; then
   echo "📦 Creating virtual environment..."
   uv venv
 fi
 
-source .venv/bin/activate
+# activate safely
+if [ -f ".venv/bin/activate" ]; then
+  source .venv/bin/activate
+else
+  echo "❌ Failed to create virtual environment"
+  return 1
+fi
 
-if [ "uv.lock" -nt ".venv" ]; then
+# sync dependencies
+if [ ! -f ".venv/.sync-complete" ] || \
+   ( [ -f uv.lock ] && [ uv.lock -nt .venv/.sync-complete ] ); then
   echo "🔄 Syncing dependencies..."
-  uv sync
+  if uv sync; then
+    touch .venv/.sync-complete
+  else
+    echo "❌ uv sync failed"
+    return 1
+  fi
 fi
