@@ -33,6 +33,10 @@
 </div>
 
 
+---
+
+# ⚠️ Warning
+The user interface was developed with the assistance of Claude Sonnet and may contain bugs. UI-related issues may be difficult to address, as I have limited involvement in that part of the codebase.
 
 ---
 
