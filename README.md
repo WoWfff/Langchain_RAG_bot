@@ -12,7 +12,7 @@
 
 <video src="https://github.com/user-attachments/assets/4ba52d93-dea9-4c17-b7ee-0067c75d303c" controls width="700"></video>
 
-<br><br>аща
+<br><br>
 
 ### Memory
 
