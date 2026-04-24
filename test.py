@@ -5,6 +5,7 @@ from os import getenv
 from app.config import (
     COLLECTION_NAME,
     LLM_MODEL_NAME,
+    LLM_MODEL_TEMPERATURE,
     PATH_TO_CHROMADB,
     PATH_TO_PAGES_FOLDER,
     PATH_TO_URLS_FILE,
@@ -55,6 +56,7 @@ async def init_services(checkpointer) -> Agent:
             collection_name=COLLECTION_NAME,
             system_prompt=SYSTEM_PROMPT,
             model_name=LLM_MODEL_NAME,
+            model_temperature=LLM_MODEL_TEMPERATURE,
             checkpointer=checkpointer,
         )
 

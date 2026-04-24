@@ -1,4 +1,3 @@
-import asyncio
 import json
 import logging
 from collections.abc import AsyncGenerator
@@ -8,19 +7,16 @@ from langchain.agents import create_agent
 from langchain.messages import HumanMessage, ToolMessage
 from langchain_chroma import Chroma
 from langchain_core.embeddings import Embeddings
-from langchain_core.tools import BaseTool, StructuredTool
+from langchain_core.tools import BaseTool
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.types import GraphOutput
 
-from app.models.agent import AgentResult, ToolInput, ToolResponse
+from app.models.agent import AgentResult
 from app.models.exceptions import AgentHistoryError, AgentProcessingError, RateLimitError
+from app.services.tools import build_search_docs_tool
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-
-def search(query: str) -> str:
-    return "result"
 
 
 class Agent:
@@ -31,6 +27,7 @@ class Agent:
         collection_name: str,
         system_prompt: str,
         model_name: str,
+        model_temperature: float,
         checkpointer,
     ):
         try:
@@ -42,10 +39,9 @@ class Agent:
 
             self.model = ChatGoogleGenerativeAI(
                 model=model_name,
-                temperature=1.0,
+                temperature=model_temperature,
                 max_tokens=None,
-                timeout=120,
-                max_retries=0,  # Disable automatic retries to handle rate limits manually
+                timeout=180,  # 3 min
             )
 
             self.retriever = self.db.as_retriever(search_kwargs={"k": 5})
@@ -63,31 +59,8 @@ class Agent:
             raise ValueError("Error while initialising AI agent.") from err
 
     def _build_tools(self) -> list[BaseTool]:
-
-        async def search_docs(query: str) -> list[dict]:
-            docs = await asyncio.to_thread(self.retriever.invoke, query)
-            logger.info("Tool call: search_docs | query=%s | docs_found=%d", query, len(docs))
-
-            response = [
-                ToolResponse(
-                    text=doc.page_content,
-                    source=doc.metadata.get("source", "unknown"),
-                    chunk_index=doc.metadata.get("chunk_index", "unknown"),
-                ).model_dump()
-                for doc in docs
-            ]
-
-            return response
-
-        func_tool = StructuredTool.from_function(
-            coroutine=search_docs,
-            name="search_docs",
-            description="""Find the information you need in the documentation.
-    Returns a list of objects with: text, source, chunk_index.""",
-            args_schema=ToolInput,
-        )
-
-        return [func_tool]
+        search_docs_tool = build_search_docs_tool(self.retriever)
+        return [search_docs_tool]
 
     def extract_tool_data(self, message: str) -> list[dict]:
         tool_results = []
