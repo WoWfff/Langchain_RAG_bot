@@ -14,8 +14,7 @@ from langgraph.types import GraphOutput
 
 from app.models.agent import AgentResult, ToolInput, ToolResponse
 from app.models.exceptions import AgentHistoryError, AgentProcessingError, RateLimitError
-
-# from app.services.tools import search_docs
+from app.services.tools import search_docs
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -42,7 +41,7 @@ class Agent:
                 model=model_name,
                 temperature=1.0,
                 max_tokens=None,
-                timeout=120,
+                timeout=180,  # 3 mins
             )
 
             self.retriever = self.db.as_retriever(search_kwargs={"k": 5})
@@ -61,21 +60,6 @@ class Agent:
 
     def _build_tools(self) -> list[BaseTool]:
 
-        async def search_docs(query: str) -> list[dict]:
-            docs = await asyncio.to_thread(self.retriever.invoke, query)
-            logger.info("Tool call: search_docs | query=%s | docs_found=%d", query, len(docs))
-
-            response = [
-                ToolResponse(
-                    text=doc.page_content,
-                    source=doc.metadata.get("source", "unknown"),
-                    chunk_index=doc.metadata.get("chunk_index", "unknown"),
-                ).model_dump()
-                for doc in docs
-            ]
-
-            return response
-
         func_tool = StructuredTool.from_function(
             coroutine=search_docs,
             name="search_docs",
@@ -86,18 +70,9 @@ class Agent:
 
         return [func_tool]
 
-    def extract_tool_data(self, message: str) -> list[dict]:
-        tool_results = []
-
-        try:
-            tool_results.extend(json.loads(message))
-        except Exception:  # noqa: BLE001
-            pass
-
-        return tool_results
-
     def extract_tool_response_for_process_message(self, response: list[dict]) -> list[dict]:
         accumulated_sources = []
+        tool_results = []
 
         for msg in response:
             data = msg.get("data", ())
@@ -107,7 +82,11 @@ class Agent:
             for message in messages:
                 if isinstance(message, ToolMessage) and message.status == "success":
                     if isinstance(message.content, str):
-                        result = self.extract_tool_data(message=message.content)
+                        try:
+                            tool_results.extend(json.loads(message.content))
+                        except Exception:  # noqa: BLE001
+                            pass
+                        result = tool_results
                         accumulated_sources.extend(result)
 
         return accumulated_sources
