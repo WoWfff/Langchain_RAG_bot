@@ -5,9 +5,9 @@ from collections.abc import AsyncGenerator
 from pathlib import Path
 
 from langchain.agents import create_agent
-from langchain.messages import HumanMessage, ToolMessage
 from langchain_chroma import Chroma
 from langchain_core.embeddings import Embeddings
+from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langchain_core.tools import BaseTool, StructuredTool
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.types import GraphOutput
@@ -15,12 +15,10 @@ from langgraph.types import GraphOutput
 from app.models.agent import AgentResult, ToolInput, ToolResponse
 from app.models.exceptions import AgentHistoryError, AgentProcessingError, RateLimitError
 
+# from app.services.tools import search_docs
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-
-def search(query: str) -> str:
-    return "result"
 
 
 class Agent:
@@ -45,7 +43,6 @@ class Agent:
                 temperature=1.0,
                 max_tokens=None,
                 timeout=120,
-                max_retries=0,  # Disable automatic retries to handle rate limits manually
             )
 
             self.retriever = self.db.as_retriever(search_kwargs={"k": 5})
@@ -99,12 +96,6 @@ class Agent:
 
         return tool_results
 
-    def extract_tool_response_for_stream_message(self, token: ToolMessage) -> list[dict]:
-        if getattr(token, "status", None) == "success" and getattr(token, "type", None) == "tool":
-            content = getattr(token, "content", None)
-            result = self.extract_tool_data(content) if content else None
-        return result or []
-
     def extract_tool_response_for_process_message(self, response: list[dict]) -> list[dict]:
         accumulated_sources = []
 
@@ -114,37 +105,25 @@ class Agent:
             messages = tools.get("messages", [])
 
             for message in messages:
-                if getattr(message, "status", None) == "success" and getattr(message, "type", None) == "tool":
-                    if hasattr(message, "content") and message.content:
+                if isinstance(message, ToolMessage) and message.status == "success":
+                    if isinstance(message.content, str):
                         result = self.extract_tool_data(message=message.content)
                         accumulated_sources.extend(result)
 
         return accumulated_sources
 
-    def extract_ai_response_from_procces_message(self, response: list[dict]) -> str | None:
+    def extract_ai_response_from_process_message(self, response: list[dict]) -> str | None:
         for msg in reversed(response):
             data = msg.get("data", ())
             updates = data.get("model", {})
             messages = updates.get("messages", [])
 
             for message in messages:
-                if getattr(message, "type", None) == "ai":
-                    result = getattr(message, "text", None)
-
-            return result or None
+                if isinstance(message, AIMessage):
+                    if hasattr(message, "text") and message.text:
+                        return message.text
 
         return None
-
-    def extract_ai_response_from_stream_message(self, message) -> list[dict] | None:
-        result = None
-
-        if hasattr(message, "type") and hasattr(message, "text"):
-            if message.type != "tool" or getattr(message, "status", None) != "success":
-                return None
-
-            result = self.extract_tool_data(message)
-
-        return result
 
     async def process_message(
         self,
@@ -166,7 +145,7 @@ class Agent:
             if debug:
                 return result
 
-            text = self.extract_ai_response_from_procces_message(response=result)  # type: ignore
+            text = self.extract_ai_response_from_process_message(response=result)  # type: ignore
             tool_response = self.extract_tool_response_for_process_message(response=result)  # type: ignore
 
             return AgentResult(response_text=text, tool_response=tool_response)
@@ -214,13 +193,10 @@ class Agent:
                                         continue
                                     yield AgentResult(response_text=block["text"], tool_response=None)  # type: ignore
 
-                        if metadata and metadata.get("langgraph_node") == "tools":
-                            tool_response = (
-                                self.extract_tool_response_for_stream_message(token=token)
-                                if isinstance(token, ToolMessage)
-                                else None
-                            )
-                            yield AgentResult(response_text=None, tool_response=tool_response)
+                        if metadata and metadata.get("langgraph_node") == "tools" and isinstance(token, ToolMessage):
+                            if token.status == "success" and isinstance(token.content, str):
+                                tool_response = json.loads(token.content)
+                                yield AgentResult(response_text=None, tool_response=tool_response)
 
         except Exception as err:
             # Check if it's a rate limit error
@@ -243,28 +219,27 @@ class Agent:
             messages = []
             pending_sources: list[dict] = []
 
-            if state and hasattr(state, "values") and "messages" in state.values:
+            if state and "messages" in state.values:
                 for msg in state.values["messages"]:
-                    msg_type = getattr(msg, "type", None)
+                    if isinstance(msg, HumanMessage):
+                        messages.append({"role": "user", "content": msg.content})
 
-                    if msg_type == "human":
-                        messages.append({"role": "user", "content": getattr(msg, "content", "")})
+                    elif isinstance(msg, AIMessage):
+                        text = msg.text or ""
 
-                    elif msg_type == "ai":
-                        text = getattr(msg, "text", "")
-
-                        if text and text.strip():
-                            new_msg = {"role": "assistant", "content": text}
+                        if text.strip():
+                            new_msg: dict[str, str | list[dict]] = {"role": "assistant", "content": text}
                             if pending_sources:
                                 new_msg["sources"] = pending_sources
                                 pending_sources = []
-                            messages.append(new_msg)
+                            messages.append(new_msg)  # type: ignore
 
-                    elif msg_type == "tool":
-                        if hasattr(msg, "text") and msg.text:
+                    elif isinstance(msg, ToolMessage):
+                        if isinstance(msg.content, str):
                             try:
-                                tool_data = json.loads(msg.text)
-                                pending_sources.extend(tool_data)
+                                tool_data = json.loads(msg.content)
+                                if isinstance(tool_data, list):
+                                    pending_sources.extend(tool_data)
                             except json.JSONDecodeError:
                                 pass
 
