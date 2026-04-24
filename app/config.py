@@ -32,6 +32,7 @@ langchain_embedding = None
 COLLECTION_NAME = "langchain-docs"
 DEVICE_FOR_MODELS = "cuda" if torch.cuda.is_available() else "cpu"
 LLM_MODEL_NAME = "gemma-4-31b-it"  # gemini-3.1-flash-lite-preview  gemini-2.5-flash-lite gemma-4-31b-it
+LLM_MODEL_TEMPERATURE = 0.5
 SYSTEM_PROMPT = """You are a technical assistant specialized in LangChain and its ecosystem.
 
 You have access to a tool:
