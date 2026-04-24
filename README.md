@@ -20,7 +20,7 @@
 
 <br><br>
 
-### Multilang
+### Multi-language
 
 <video src="https://github.com/user-attachments/assets/078a46b7-b9b3-4215-9838-ed42fcc08c72" controls width="700"></video>
 
@@ -464,7 +464,7 @@ Custom exceptions:
 
 ## ChromaDB Initialization Errors
 
-**Problem**: `Error while initialising AI agent` or ChromaDB errors
+**Problem**: `Error while initializing AI agent` or ChromaDB errors
 
 **Solutions**:
 - Delete `data/chromadb/` directory and restart (will re-download docs)

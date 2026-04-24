@@ -1,7 +1,6 @@
 import asyncio
 import logging
 from contextlib import asynccontextmanager
-from os import getenv
 
 from app.config import (
     COLLECTION_NAME,
@@ -21,7 +20,6 @@ from app.services.agent import Agent
 from app.services.database import Database
 from app.services.exception_handlers import register_exception_handlers
 from app.services.retrieve import ingest_docs_to_chromadb
-from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -32,12 +30,6 @@ from psycopg_pool import AsyncConnectionPool
 # Configuration
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-# API key
-load_dotenv()
-GEMINI_API_KEY = getenv("GEMINI_API_KEY")
-if not GEMINI_API_KEY:
-    raise ValueError("API key not found in .env")
 
 
 async def init_services(app: FastAPI, checkpointer):

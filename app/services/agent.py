@@ -15,7 +15,6 @@ from app.models.agent import AgentResult
 from app.models.exceptions import AgentHistoryError, AgentProcessingError, RateLimitError
 from app.services.tools import build_search_docs_tool
 
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 

@@ -3,7 +3,14 @@ import pathlib
 
 import tiktoken
 import torch
+from dotenv import load_dotenv
 from langchain_huggingface import HuggingFaceEmbeddings
+
+# API key
+load_dotenv()
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+if not GEMINI_API_KEY:
+    raise ValueError("API key not found in .env")
 
 # Pathes
 PATH_TO_ROOT_FOLDER = pathlib.Path(__file__).resolve().parent.parent
