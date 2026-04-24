@@ -7,13 +7,13 @@ from langchain.agents import create_agent
 from langchain_chroma import Chroma
 from langchain_core.embeddings import Embeddings
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
-from langchain_core.tools import BaseTool, StructuredTool
+from langchain_core.tools import BaseTool
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.types import GraphOutput
 
-from app.models.agent import AgentResult, ToolInput
+from app.models.agent import AgentResult
 from app.models.exceptions import AgentHistoryError, AgentProcessingError, RateLimitError
-from app.services.tools import search_docs
+from app.services.tools import build_search_docs_tool
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -27,6 +27,7 @@ class Agent:
         collection_name: str,
         system_prompt: str,
         model_name: str,
+        model_temperature: float,
         checkpointer,
     ):
         try:
@@ -38,9 +39,9 @@ class Agent:
 
             self.model = ChatGoogleGenerativeAI(
                 model=model_name,
-                temperature=1.0,
+                temperature=model_temperature,
                 max_tokens=None,
-                timeout=180,  # 3 mins
+                timeout=180,  # 3 min
             )
 
             self.retriever = self.db.as_retriever(search_kwargs={"k": 5})
@@ -58,16 +59,8 @@ class Agent:
             raise ValueError("Error while initialising AI agent.") from err
 
     def _build_tools(self) -> list[BaseTool]:
-
-        func_tool = StructuredTool.from_function(
-            coroutine=search_docs,
-            name="search_docs",
-            description="""Find the information you need in the documentation.
-    Returns a list of objects with: text, source, chunk_index.""",
-            args_schema=ToolInput,
-        )
-
-        return [func_tool]
+        search_docs_tool = build_search_docs_tool(self.retriever)
+        return [search_docs_tool]
 
     def extract_tool_response_for_process_message(self, response: list[dict]) -> list[dict]:
         accumulated_sources = []
