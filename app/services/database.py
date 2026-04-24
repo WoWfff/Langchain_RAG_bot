@@ -65,15 +65,12 @@ class Database:
     async def get_user_by_cookies_id(self, cookies_id: str) -> User | None:
         async with self.async_session() as session:
             stmt = select(User).where(User.cookies_id == cookies_id)
-            result = await session.execute(stmt)
-            return result.scalar_one_or_none()
+            return await session.scalar(stmt)
 
     async def get_user_by_id(self, user_id: int) -> User | None:
         async with self.async_session() as session:
             stmt = select(User).where(User.id == user_id)
-
-            result = await session.execute(stmt)
-            return result.scalar_one_or_none()
+            return await session.scalar(stmt)
 
     # ========================================================
     #                        Thread_id
@@ -93,8 +90,7 @@ class Database:
     async def get_thread_by_id(self, thread_id: str) -> Thread | None:
         async with self.async_session() as session:
             stmt = select(Thread).where(Thread.thread_id == thread_id)
-            result = await session.execute(stmt)
-            return result.scalar_one_or_none()
+            return await session.scalar(stmt)
 
     async def get_user_threads(self, user_id: int) -> list[Thread]:
         async with self.async_session() as session:
@@ -117,8 +113,7 @@ class Database:
         async with self.async_session() as session:
             # First check if thread exists and belongs to user
             stmt = select(Thread).where(Thread.user_id == user_id, Thread.thread_id == thread_id)
-            result = await session.execute(stmt)
-            thread = result.scalar_one_or_none()
+            thread = await session.scalar(stmt)
 
             if thread is None:
                 raise ThreadNotFoundOrDoestBelongError(user_id=user_id, thread_id=thread_id)
@@ -141,8 +136,7 @@ class Database:
         async with self.async_session() as session:
             # Verify thread exists and belongs to user
             select_stmt = select(Thread).where(Thread.thread_id == thread_id, Thread.user_id == user_id)
-            result = await session.execute(select_stmt)
-            thread = result.scalar_one_or_none()
+            thread = await session.scalar(select_stmt)
 
             if thread is None:
                 raise ThreadNotFoundOrDoestBelongError(user_id=user_id, thread_id=thread_id)
@@ -202,8 +196,7 @@ class Database:
 
             # Get user and check if this is the active thread
             stmt_user = select(User).where(User.id == user_id)
-            result = await session.execute(stmt_user)
-            user = result.scalar_one_or_none()
+            user = await session.scalar(stmt_user)
 
             # If this was the active thread, set active_thread_id to None
             if user and user.active_thread_id == thread_id:
